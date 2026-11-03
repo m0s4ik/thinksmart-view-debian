@@ -1,6 +1,6 @@
 # 🖥️ ThinkSmart View Debian
 
-Run a minimal **Debian 13** on the **Lenovo ThinkSmart View** (CD-18781Y, the 8" Teams/Zoom desk display), with
+Run an **ultra-light Debian 13** on the **Lenovo ThinkSmart View** (CD-18781Y, the 8" Teams/Zoom desk display), with
 working **screen, touch, speaker, microphones, Wi-Fi and sensors**. No Android, no browser: a clean Linux base with no
 desktop, for whatever you want to build on it — a voice assistant, a smart-home panel, a clock, a kiosk.
 
@@ -23,6 +23,22 @@ If this project saved you some time, you can also
 <p align="center"><img src="docs/screenshot.png" width="720" alt="fastfetch on the ThinkSmart View: Debian 13 aarch64, kernel 7.1.3-msm8953, GPU freedreno FD506"></p>
 <p align="center"><sub><code>fastfetch</code> on the device, drawn in landscape with the console font (Terminus).</sub></p>
 
+## Why this one
+
+Built to be **as light as possible**, so that the 2 GB of RAM and the eight small Cortex-A53 cores are left to your
+application:
+
+| | |
+|---|---|
+| 🪶 **~200 MB of RAM** | used by the whole system, kernel included, with no application running: ~1.7 GB left for yours |
+| 📦 **208 Debian packages** | ~530 MB on disk with kernel modules and GPU drivers; the compressed image is ~190 MB |
+| ⚙️ **A handful of services** | systemd, journald, udev, NetworkManager, wpa_supplicant, ssh, timesyncd, nftables, plus the audio and light sensor setup. No desktop, no display server, no browser |
+| ⏱️ **~25 s boot** | from power on to ssh (16 s kernel and initramfs, 9 s userspace) |
+| 🎮 **GPU without the weight** | Mesa built for this GPU only and without LLVM: ~19 MB instead of the ~170 MB of Debian's Mesa |
+| 🧱 **Plain Debian** | apt and Debian's security updates, systemd, nothing custom to learn; the whole image comes from one script you can read |
+
+<sub>Measured on our device on 2026-11-03 (RAM: in use minus our own application).</sub>
+
 ## What works
 
 | | |
@@ -35,7 +51,7 @@ If this project saved you some time, you can also
 | 📶 **Wi-Fi** | QCA9379 (ath10k), NetworkManager profile from the build config |
 | 🧭 **Sensors and keys** | BMA253 accelerometer (rotation), VCNL4200 ambient light, Vol+ / Vol− keys, camera shutter switch |
 | 🔒 **Access** | ssh with keys only, nftables firewall open only to your LAN |
-| 🚀 **Headless boot** | ready in ~30 s, survives without a keyboard (no emergency-mode dead ends) |
+| 🚀 **Headless boot** | ready in ~25 s, survives without a keyboard (no emergency-mode dead ends) |
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
 
 Not yet: camera (sensor driver missing), suspend. See [known issues](docs/known-issues.md).
