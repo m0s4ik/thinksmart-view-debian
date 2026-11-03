@@ -1,0 +1,240 @@
+#!/bin/bash
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Checks on a finished image without the device (root, on the build machine):
+#   bash image/verify.sh <image> [sectors]        (run by build.sh before compressing)
+# Opens the image read-only through loop devices and checks: size, MBR, p1 features (lk2nd), UUIDs in extlinux.conf
+# and fstab, the TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile,
+# Python and the ALSA configuration (through qemu).
+# Headless boot: dmsetup and the device-mapper udev rules, /boot nofail (fstab generator of the image), and a test
+# device-mapper on p1 (read-only, removed at the end) run through `udevadm test` with the rules of the image and an
+# empty udev database, as after switch_root from the postmarketOS initramfs.
+# Prints no secrets (of the Wi-Fi profile it only checks that a PSK is present).
+set -u
+IMG=$1
+SECTORS=${2:-14280671}
+KVER=7.1.3-msm8953
+V=$(mktemp -d /tmp/verify-image.XXXXXX)
+ERR=0
+LOOP1=
+LOOP2=
+DMN=verify-image-p1
+LOOP_DM=
+
+ok() { echo "  ok    $*"; }
+no() { echo "  FAIL  $*"; ERR=$((ERR + 1)); }
+check() { local d=$1; shift; if "$@" >/dev/null 2>&1; then ok "$d"; else no "$d"; fi; }
+cleanup() {
+    for d in $(awk '{print $2}' /proc/mounts | grep -E "^$V(/|$)" | sort -r); do umount -l "$d" 2>/dev/null || true; done
+    dmsetup remove "$DMN" 2>/dev/null || true
+    [ -n "$LOOP_DM" ] && losetup -d "$LOOP_DM" 2>/dev/null || true
+    for l in "$LOOP1" "$LOOP2"; do [ -n "$l" ] && losetup -d "$l" 2>/dev/null || true; done
+    rmdir "$V" 2>/dev/null || true
+}
+trap cleanup EXIT
+loop_attach() {  # loop_attach IMG START SIZE [losetup options]: one partition (in sectors) on its own loop device
+    # No losetup -P: in a container (LXC, docker) /dev is not devtmpfs, so neither the loop node nor the partition
+    # nodes appear by themselves; create the node if missing and attach the partition with an offset instead.
+    local img=$1 start=$2 size=$3 dev
+    shift 3
+    dev=$(losetup -f | awk '{print $1}')
+    [ -b "$dev" ] || mknod -m 0660 "$dev" b 7 "${dev#/dev/loop}"
+    losetup "$@" -o $((start * 512)) --sizelimit $((size * 512)) "$dev" "$img" && echo "$dev"
+}
+inside() { chroot "$V" /usr/bin/env -i PATH=/usr/sbin:/usr/bin HOME=/tmp LANG=C.UTF-8 PYTHONDONTWRITEBYTECODE=1 "$@"; }
+enabled() { systemctl --root="$V" is-enabled "$1" 2>/dev/null; }
+
+echo "Verifying $IMG"
+size=$(stat -c %s "$IMG")
+[ "$size" = $((SECTORS * 512)) ] && ok "size $size bytes = $SECTORS sectors" || no "size $size, expected $((SECTORS * 512))"
+sfdisk -d "$IMG" | grep -q "start=        2048, size=      497664, type=ef, bootable" && ok "MBR: p1 2048+497664 ef bootable" || no "MBR: p1"
+sfdisk -d "$IMG" | grep -q "start=      499712, size= *$((SECTORS - 499712)), type=83" && ok "MBR: p2 from 499712 to the end" || no "MBR: p2"
+
+LOOP1=$(loop_attach "$IMG" 2048 497664 -r)
+LOOP2=$(loop_attach "$IMG" 499712 $((SECTORS - 499712)) -r)
+feat=$(tune2fs -l "$LOOP1" | sed -n 's/^Filesystem features: *//p')
+echo "  p1 features: $feat (block $(tune2fs -l "$LOOP1" | sed -n 's/^Block size: *//p'))"
+bad=
+for f in extent 64bit metadata_csum has_journal flex_bg huge_file orphan_file; do
+    echo " $feat " | grep -q " $f " && bad="$bad $f"
+done
+[ -z "$bad" ] && ok "p1 ext2 without newer features (like postmarketOS)" || no "p1 with features:$bad"
+echo "  p2 features: $(tune2fs -l "$LOOP2" | sed -n 's/^Filesystem features: *//p')"
+U1=$(blkid -s UUID -o value "$LOOP1"); U2=$(blkid -s UUID -o value "$LOOP2")
+[ "$(blkid -s TYPE -o value "$LOOP1")" = ext2 ] && ok "p1 ext2 ($U1, $(blkid -s LABEL -o value "$LOOP1"))" || no "p1 is not ext2"
+[ "$(blkid -s TYPE -o value "$LOOP2")" = ext4 ] && ok "p2 ext4 ($U2, $(blkid -s LABEL -o value "$LOOP2"))" || no "p2 is not ext4"
+e2fsck -fn "$LOOP1" >/dev/null 2>&1 && ok "e2fsck p1" || no "e2fsck p1"
+e2fsck -fn "$LOOP2" >/dev/null 2>&1 && ok "e2fsck p2" || no "e2fsck p2"
+
+mount -o ro "$LOOP2" "$V"
+mount -o ro "$LOOP1" "$V/boot"
+
+echo "-- boot"
+E=$V/boot/extlinux/extlinux.conf
+grep -q "pmos_boot_uuid=$U1 " "$E" && ok "extlinux.conf: pmos_boot_uuid = UUID of p1" || no "extlinux.conf: pmos_boot_uuid"
+grep -q "pmos_root_uuid=$U2 " "$E" && ok "extlinux.conf: pmos_root_uuid = UUID of p2" || no "extlinux.conf: pmos_root_uuid"
+[ "$(grep -c '^label' "$E")" = 1 ] && ok "extlinux.conf: a single entry (lk2nd)" || no "extlinux.conf: several entries"
+grep -q "consoleblank=0 vt.global_cursor_default=0" "$E" && ok "extlinux.conf: consoleblank=0 vt.global_cursor_default=0" || no "extlinux.conf: console options"
+grep -q "quiet loglevel=0 systemd.show_status=0 " "$E" && ok "extlinux.conf: quiet loglevel=0 systemd.show_status=0 (no text on the screen while booting)" || no "extlinux.conf: loglevel/show_status"
+grep -q "^UUID=${U2}[[:space:]]*/[[:space:]]" "$V/etc/fstab" && grep -q "^UUID=${U1}[[:space:]]*/boot[[:space:]]" "$V/etc/fstab" \
+    && ok "fstab with the same UUIDs" || no "fstab"
+grep -q "^UUID=${U1}[[:space:]]*/boot[[:space:]].*nofail,x-systemd.device-timeout=15[[:space:]]" "$V/etc/fstab" \
+    && ok "fstab: /boot with nofail,x-systemd.device-timeout=15" || no "fstab: /boot without nofail/device-timeout"
+for f in /usr/lib/udev/rules.d/55-dm.rules /usr/lib/udev/rules.d/60-persistent-storage-dm.rules /etc/udev/rules.d/54-dm-initramfs.rules; do
+    check "udev: $f" test -s "$V$f"
+done
+dms=$(grep -ho '/[a-z/]*sbin/dmsetup' "$V/usr/lib/udev/rules.d/55-dm.rules" 2>/dev/null | sort -u)
+[ -n "$dms" ] || no "55-dm.rules without the path of dmsetup"
+for p in $dms; do check "dmsetup in $p (called by the udev rules)" test -x "$V$p"; done
+check "54-dm-initramfs.rules valid (udevadm verify)" udevadm verify --resolve-names=never "$V/etc/udev/rules.d/54-dm-initramfs.rules"
+[ "$(readlink "$V/etc/systemd/system-generators/systemd-gpt-auto-generator")" = /dev/null ] \
+    && ok "systemd-gpt-auto-generator disabled" || no "systemd-gpt-auto-generator active"
+if grep -lE '^(Requires|BindsTo|Requisite|RequiresMountsFor)=.*(local-fs\.target|boot\.mount|/boot)' "$V"/etc/systemd/system/*.service >/dev/null 2>&1; then
+    no "one of our units requires local-fs.target or /boot"
+else
+    ok "none of our units requires local-fs.target or /boot"
+fi
+for f in vmlinuz initramfs apq8053-lenovo-cd-18781y.dtb dtbs/qcom/apq8053-lenovo-cd-18781y.dtb config; do
+    check "/boot/$f" test -s "$V/boot/$f"
+done
+cmp -s "$V/boot/apq8053-lenovo-cd-18781y.dtb" "$V/boot/dtbs/qcom/apq8053-lenovo-cd-18781y.dtb" && ok "the two DTBs are identical" || no "DTBs differ"
+check "/sbin/init -> systemd" test "$(readlink -f "$V/sbin/init" | sed "s|^$V||")" = /usr/lib/systemd/systemd
+check "/etc/os-release (required by the initramfs)" test -e "$V/usr/lib/os-release" -a -L "$V/etc/os-release"
+
+echo "-- device-mapper of /boot as created by the initramfs (kpartx), coldplug without udev database"
+# on a separate loop with only the bytes of p1: the image loop has its partitions mounted
+LOOP_DM=$(loop_attach "$IMG" 2048 497664 -r)
+if dmsetup create --readonly "$DMN" --table "0 497664 linear $LOOP_DM 0"; then
+    udevadm settle 2>/dev/null || true
+    D=$(dmsetup info --noheadings -c -o blkdevname "$DMN")
+    # in a container nothing creates /dev/dm-N, and udev's blkid needs it: make the node for the test
+    DM_NODE=
+    if [ ! -b "/dev/$D" ]; then
+        mknod -m 0600 "/dev/$D" b "$(dmsetup info --noheadings -c -o major "$DMN")" \
+            "$(dmsetup info --noheadings -c -o minor "$DMN")" && DM_NODE=/dev/$D
+    fi
+    # udevadm test in a mount namespace: rules of the image, empty /run/udev (database and runtime rules; in a
+    # container without udev /run/udev does not exist yet)
+    test_dm() {
+        unshare -m sh -c 'mkdir -p /run/udev && mount -t tmpfs tmpfs /run/udev && mount --bind "$1/usr/lib/udev/rules.d" /usr/lib/udev/rules.d \
+            && mount --bind "$2" /etc/udev/rules.d && udevadm test --action=add "/sys/class/block/$3"' sh "$V" "$1" "$D" 2>/dev/null | sed 's/^ *//'
+    }
+    out=$(test_dm "$V/etc/udev/rules.d")
+    if ! dd if="/dev/$D" of=/dev/null bs=512 count=1 status=none 2>/dev/null; then
+        # e.g. an LXC container whose device cgroup allows loop but not device-mapper (major 252) devices
+        echo "  --    add without database: SKIPPED, /dev/$D cannot be opened here (container?), udev's blkid needs it"
+    elif echo "$out" | grep -q "^DEVLINKS=.*/dev/disk/by-uuid/$U1" && ! echo "$out" | grep -q '^SYSTEMD_READY=0'; then
+        ok "add without database: /dev/disk/by-uuid/$U1 and device ready for systemd"
+    else
+        no "add without database: no by-uuid or SYSTEMD_READY=0 (/boot would not mount)"
+        echo "$out" | grep -E '^(DEVLINKS|SYSTEMD_READY|DM_)' | sed 's/^/        /'
+    fi
+    empty=$(mktemp -d)
+    if test_dm "$empty" | grep -q '^SYSTEMD_READY=0'; then
+        echo "  --    without 54-dm-initramfs.rules: SYSTEMD_READY=0 and no by-uuid (the cause of the emergency mode)"
+    else
+        echo "  --    without 54-dm-initramfs.rules the device would be ready anyway (dm rules changed?)"
+    fi
+    rmdir "$empty"
+    [ -n "$DM_NODE" ] && rm -f "$DM_NODE"
+    dmsetup remove "$DMN" 2>/dev/null || true
+    losetup -d "$LOOP_DM" 2>/dev/null || true; LOOP_DM=
+else
+    no "dmsetup create of the test device"
+fi
+
+echo "-- modules, firmware, UCM"
+MD=$V/usr/lib/modules/$KVER
+grep -q '^extra/snd-soc-tas5782m.ko:' "$MD/modules.dep" && ok "modules.dep: extra/snd-soc-tas5782m.ko" || no "modules.dep without tas5782m"
+grep -q 'tas5782m' "$MD/modules.alias" && ok "modules.alias: tas5782m" || no "modules.alias without tas5782m"
+check "GPU: reduced Mesa (libgallium, EGL, GLES, GBM) in /opt/mesa-freedreno" test -s "$V/opt/mesa-freedreno/lib/gbm/dri_gbm.so"
+check "GPU: /opt/mesa-freedreno/lib in ld.so.conf.d" grep -qx /opt/mesa-freedreno/lib "$V/etc/ld.so.conf.d/mesa-freedreno.conf"
+grep -q "/opt/mesa-freedreno/lib/libEGL.so.1" "$V/etc/ld.so.cache" && ok "GPU: libEGL.so.1 in ld.so.cache" || no "GPU: libEGL.so.1 not in ld.so.cache"
+[ -z "$(find "$V/usr/lib" -maxdepth 2 -name "libLLVM*" -o -maxdepth 2 -name "libgallium*" 2>/dev/null)" ] && ok "GPU: no Debian Mesa/LLVM" || no "GPU: Debian Mesa or LLVM installed next to the reduced Mesa"
+grep -aq 'parm=volume_mode:' "$MD/extra/snd-soc-tas5782m.ko" && ok "tas5782m with hardware volume" || no "tas5782m is the old driver (no hardware volume)"
+[ -z "$(find "$MD/extra" -name "*dbg*")" ] && ok "no -dbg module" || no "-dbg module present"
+grep -q '^kernel/drivers/net/wireless/ath/ath10k/ath10k_sdio.ko' "$MD/modules.dep" && ok "modules.dep: ath10k_sdio" || no "ath10k_sdio"
+for m in bmc150-accel-i2c bmc150-accel-core; do
+    grep -q "^kernel/drivers/iio/accel/$m.ko:" "$MD/modules.dep" && ok "modules.dep: $m" || no "modules.dep without $m"
+done
+if grep -q '^alias of:N\*T\*Cbosch,bma253 bmc150_accel_i2c$' "$MD/modules.alias"; then
+    ok "modules.alias: bosch,bma253 -> bmc150_accel_i2c"
+elif grep -q '^bmc150_accel_i2c$' "$V/etc/modules-load.d/thinksmart.conf" 2>/dev/null; then
+    ok "bmc150_accel_i2c without alias, but in /etc/modules-load.d/thinksmart.conf"
+else
+    no "bmc150_accel_i2c: neither alias nor modules-load.d"
+fi
+grep -aq 'bosch,bma253' "$V/boot/apq8053-lenovo-cd-18781y.dtb" && ok "DTB: bosch,bma253 node" || no "DTB without bosch,bma253"
+echo "  modules: $(find "$MD" -name '*.ko' | wc -l) .ko files"
+F=$V/usr/lib/firmware
+for f in ath10k/QCA9379/hw1.0/firmware-sdio-6.bin ath10k/QCA9379/hw1.0/board-2.bin qcom/a530_pm4.fw qcom/a530_pfp.fw \
+         qcom/msm8953/lenovo/cd-18781y/a506_zap.mdt tas5728m_dsp_lenovo_cd-18781y.bin regulatory.db; do
+    check "firmware $f" test -s "$F/$f"
+done
+check "directory for msm-firmware-loader" test -d "$F/msm-firmware-loader"
+check "msm-firmware-loader.sh" test -x "$V/usr/local/sbin/msm-firmware-loader.sh"
+for f in conf.d/cd-18781y/cd-18781y.conf Lenovo/cd-18781y/HiFi.conf lib/card-init.conf lib/ctl-remap.conf; do
+    check "UCM $f" test -s "$V/usr/share/alsa/ucm2/$f"
+done
+check "softvol speaker in /etc/asound.conf" grep -q 'Master Playback Volume' "$V/etc/asound.conf"
+
+echo "-- services"
+for s in NetworkManager ssh systemd-timesyncd nftables msm-firmware-loader thinksmart-audio thinksmart-light; do
+    st=$(enabled "$s"); [ "$st" = enabled ] && ok "$s: $st" || no "$s: $st"
+done
+for s in alsa-restore alsa-state; do
+    st=$(enabled "$s"); [ "$st" = masked ] && ok "$s: $st" || no "$s: $st (should be masked)"
+done
+echo "  NetworkManager-wait-online: $(enabled NetworkManager-wait-online)"
+echo "  getty@tty1: $(enabled getty@tty1) (login on the screen)"
+
+echo "-- system"
+echo "  hostname $(cat "$V/etc/hostname")"
+grep -q "^127.0.1.1[[:space:]]*$(cat "$V/etc/hostname")\$" "$V/etc/hosts" && ok "/etc/hosts" || no "/etc/hosts"
+grep -Eq '^[0-9a-f]{32}$' "$V/etc/machine-id" && ok "machine-id" || no "machine-id"
+echo "  time zone $(readlink "$V/etc/localtime")"
+grep -q '^ssh-' "$V/root/.ssh/authorized_keys" && [ "$(stat -c %a "$V/root/.ssh/authorized_keys")" = 600 ] \
+    && ok "root authorized_keys ($(grep -c '^ssh-' "$V/root/.ssh/authorized_keys") keys)" || no "authorized_keys"
+awk -F: '$1=="root"{exit !($2 ~ /^(\$|!)/)}' "$V/etc/shadow" && ok "root password set or locked" || no "root without password"
+grep -q '^PasswordAuthentication no' "$V/etc/ssh/sshd_config.d/thinksmart.conf" && ok "ssh without passwords" || no "sshd"
+check "ssh host keys" test -s "$V/etc/ssh/ssh_host_ed25519_key"
+WP=$V/etc/NetworkManager/system-connections/wifi.nmconnection
+[ "$(stat -c '%a %U' "$WP")" = "600 root" ] && ok "Wi-Fi profile 0600 root" || no "permissions of the Wi-Fi profile"
+grep -q '^ssid=.' "$WP" && grep -q '^psk=.' "$WP" && grep -q '^autoconnect-retries=0$' "$WP" \
+    && ok "Wi-Fi profile: SSID and PSK present, infinite retries$(grep -q '^cloned-mac-address=' "$WP" && echo ', fixed MAC')" || no "Wi-Fi profile"
+grep -q '^wifi.scan-rand-mac-address=no' "$V/etc/NetworkManager/conf.d/thinksmart.conf" && ok "scans without random MAC" || no "NM conf"
+grep -q '^Storage=persistent' "$V/etc/systemd/journald.conf.d/thinksmart.conf" && ok "journal on disk" || no "journald"
+nft -c -f "$V/etc/nftables.conf" >/dev/null 2>&1 && ok "nftables.conf valid (nft -c)" || no "nftables.conf"
+check "/etc/thinksmart-version" test -s "$V/etc/thinksmart-version"
+grep -q "^VOLUME=" "$V/etc/default/thinksmart-audio" && ok "/etc/default/thinksmart-audio" || no "/etc/default/thinksmart-audio"
+check "thinksmart-audio script" test -x "$V/usr/local/sbin/thinksmart-audio"
+check "thinksmart-light script" test -x "$V/usr/local/sbin/thinksmart-light"
+if [ -e "$MD/extra/vcnl4000.ko" ]; then
+    grep -q '^extra/vcnl4000.ko:' "$MD/modules.dep" && ok "modules.dep: extra/vcnl4000.ko (light sensor)" || no "vcnl4000.ko not in modules.dep"
+else
+    echo "  skip  no vcnl4000.ko: image without the light sensor (optional)"
+fi
+echo "  used: root $(du -sh --exclude=boot "$V" 2>/dev/null | cut -f1), /boot $(du -sh "$V/boot" | cut -f1)"
+
+echo "-- inside the image (arm64 through qemu)"
+mount -t proc proc "$V/proc"
+mount -t tmpfs tmpfs "$V/tmp"
+mount --bind /dev "$V/dev"
+mount -t sysfs sys "$V/sys"     # without /sys the fstab generator believes it runs in a container
+# fstab generator of the image: /boot must not end up in local-fs.target.requires (that would be emergency mode)
+G=$V/tmp/gen; mkdir -p "$G"
+inside SYSTEMD_PROC_CMDLINE= SYSTEMD_IN_INITRD=0 /usr/lib/systemd/system-generators/systemd-fstab-generator /tmp/gen /tmp/gen /tmp/gen >/dev/null 2>&1
+[ -e "$G/local-fs.target.wants/boot.mount" ] && [ ! -e "$G/local-fs.target.requires/boot.mount" ] \
+    && ok "fstab generator: boot.mount only wanted by local-fs.target (nofail)" || no "fstab generator: boot.mount"
+[ "$(ls "$G/local-fs.target.requires" 2>/dev/null | tr '\n' ' ')" = "-.mount " ] \
+    && ok "fstab generator: local-fs.target requires only -.mount" || no "fstab generator: local-fs.target.requires = $(ls "$G/local-fs.target.requires" 2>/dev/null | tr '\n' ' ')"
+grep -qs '^JobRunningTimeoutSec=15$' "$G"/*.device.d/50-device-timeout.conf && ok "fstab generator: 15 s wait for the /boot device" || no "fstab generator: device-timeout"
+inside /usr/bin/python3 -c "import venv, ssl, sqlite3" 2>/dev/null && ok "python3 with venv (for applications)" || no "python3"
+inside /usr/bin/aplay -L > "$V/tmp/pcm.txt" 2>&1; grep -q '^speaker$' "$V/tmp/pcm.txt" && grep -q '^default$' "$V/tmp/pcm.txt" \
+    && ok "ALSA pcms speaker and default (asound.conf parsed)" || { no "ALSA pcms"; head -5 "$V/tmp/pcm.txt"; }
+
+echo
+sed 's/^/  /' "$V/etc/thinksmart-version"
+echo
+if [ $ERR = 0 ]; then echo "VERIFY OK"; else echo "VERIFY: $ERR checks failed"; fi
+exit $ERR

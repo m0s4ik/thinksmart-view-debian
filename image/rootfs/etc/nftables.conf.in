@@ -1,0 +1,31 @@
+#!/usr/sbin/nft -f
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Inbound: only the TCP ports LAN_TCP_PORTS (default ssh) from the local network (LAN_V4 and LAN_V6 of config.env),
+# plus loopback, replies and ICMP; everything else is dropped. Outbound: open.
+flush ruleset
+
+table inet filter {
+	chain input {
+		type filter hook input priority filter; policy drop;
+
+		iif lo accept comment "loopback"
+		ct state established,related accept comment "replies to outgoing traffic"
+		ct state invalid drop
+
+		meta l4proto icmp accept comment "ICMP"
+		meta l4proto ipv6-icmp accept comment "ICMPv6 (neighbor discovery, router advertisements)"
+		ip6 saddr fe80::/10 udp dport 546 accept comment "DHCPv6 replies"
+
+		ip saddr @LAN_V4@ tcp dport @LAN_TCP_PORTS@ accept comment "LAN_TCP_PORTS from the LAN"
+		ip6 saddr @LAN_V6@ tcp dport @LAN_TCP_PORTS@ accept comment "LAN_TCP_PORTS from the LAN (IPv6)"
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy drop;
+	}
+
+	chain output {
+		type filter hook output priority filter; policy accept;
+	}
+}

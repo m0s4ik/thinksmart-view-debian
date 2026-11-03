@@ -1,0 +1,15 @@
+# local configuration with secrets
+image/config.env
+# device files (kernel, firmware, modules): never in the repository
+image/parts/
+*.ko
+*.img
+*.img.gz
+*.bin
+__pycache__/
+# release attachments
+dist/
+# home strings for .github/scripts/check-private.sh (never committed)
+.private-patterns
+# upstream source copied at build time (driver/vcnl4000/README.md)
+driver/vcnl4000/vcnl4000.c

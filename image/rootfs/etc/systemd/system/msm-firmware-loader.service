@@ -1,0 +1,21 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Qualcomm firmware from the device's own partitions (modem, persist): adsp (audio), Wi-Fi, venus.
+# Mounts modem and persist read-only under /lib/firmware/msm-firmware-loader/mnt, links the blobs into .../target
+# and puts that directory in /sys/module/firmware_class/parameters/path. Must run before udev: the remote processor
+# (q6v5_pas) and ath10k drivers are modules loaded by udev that request their firmware immediately.
+[Unit]
+Description=Qualcomm firmware from the modem and persist partitions (msm-firmware-loader)
+DefaultDependencies=no
+After=systemd-remount-fs.service
+Before=systemd-udevd.service systemd-udev-trigger.service sysinit.target
+Conflicts=shutdown.target
+ConditionPathIsDirectory=/lib/firmware/msm-firmware-loader
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/msm-firmware-loader.sh
+
+[Install]
+WantedBy=sysinit.target

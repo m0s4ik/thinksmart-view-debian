@@ -1,0 +1,62 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Audio setup at boot (run by thinksmart-audio.service, log in the journal).
+# udev loads snd-soc-tas5782m (device tree alias); without it the card does not register and the microphones do not
+# work either. 'Speaker Amp Master' restarts at 0 (muted) every time the module is loaded.
+# Volume in percent: /var/lib/thinksmart/volume (applications may write it) if present, otherwise VOLUME from
+# /etc/default/thinksmart-audio. It goes on the amplifier: 'Speaker Amp Master' (0-85, 1 dB per step, 85 = 0 dB)
+# = 45 + 0.4 x percent (5% = 47 = -38 dB, 40% = 61 = -24 dB, 100% = 85 = 0 dB, 0% = mute), and the softvol control
+# "Master" of the speaker pcm (/etc/asound.conf) stays at 100% (0 dB). With an old module without hardware volume
+# (no volume_mode parameter, see driver/tas5782m/README.md), or VOLUME_CONTROL=softvol, the amplifier stays at 85
+# and the percent goes on the softvol (-40...0 dB).
+VOLUME_CONTROL="${VOLUME_CONTROL:-amplifier}"
+VOLUME_FILE=/var/lib/thinksmart/volume
+VOLUME="${VOLUME:-40}"
+source="VOLUME"
+if [ -r "$VOLUME_FILE" ]; then
+    v=$(tr -dc 0-9 < "$VOLUME_FILE")
+    if [ -n "$v" ] && [ "$v" -le 100 ]; then
+        VOLUME=$v
+        source=$VOLUME_FILE
+    else
+        echo "$VOLUME_FILE is not valid, using VOLUME=$VOLUME" >&2
+    fi
+fi
+if grep -q '^snd_soc_tas5782m ' /proc/modules; then
+    module="already loaded by udev"
+else
+    modprobe snd_soc_tas5782m && module="loaded here" || module="modprobe failed"
+fi
+i=0
+until grep -q cd18781y /proc/asound/cards 2>/dev/null; do
+    i=$((i + 1))
+    if [ $i -gt 60 ]; then
+        echo "sound card cd-18781y missing after 30 s (module: $module)" >&2
+        exit 1
+    fi
+    sleep 0.5
+done
+sleep 1
+# UCM boot sequence (gain of the digital microphones), then verb and devices
+alsaucm -c hw:0 set _boot '' || echo "alsaucm _boot failed" >&2
+alsaucm -c hw:0 set _verb HiFi set _enadev Speaker set _enadev Microphone || echo "alsaucm failed" >&2
+# same as the BootSequence of conf.d/cd-18781y, in case _boot did not apply it
+amixer -q -c 0 cset name='TX1 Digital Volume' 115 || true
+amixer -q -c 0 cset name='TX2 Digital Volume' 115 || true
+if [ ! -e /sys/module/snd_soc_tas5782m/parameters/volume_mode ]; then
+    VOLUME_CONTROL=softvol
+fi
+if [ "$VOLUME_CONTROL" = softvol ]; then
+    amp=85
+    soft="$VOLUME%"
+else
+    if [ "$VOLUME" -le 0 ]; then amp=0; else amp=$(( (450 + 4 * VOLUME + 5) / 10 )); fi
+    soft=100%
+fi
+amixer -q -c 0 sset 'Speaker Amp Master' "$amp" || echo "amplifier level not set" >&2
+# the softvol control appears when the pcm is first opened: opened with nothing to play, the stream does not start
+# (the amplifier stays off, no noise)
+aplay -q -D speaker -r 22050 -c 1 -f S16_LE -t raw /dev/null || echo "pcm speaker not opened (missing /etc/asound.conf?)" >&2
+amixer -q -c 0 cset name='Master Playback Volume' "$soft" || echo "softvol not set" >&2
+echo "audio ready (module $module, volume $VOLUME% from $source on $VOLUME_CONTROL: amplifier $amp, softvol $soft)"

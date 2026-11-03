@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# /etc/default/thinksmart-audio: read by thinksmart-audio.service at boot.
+# Speaker volume in percent (0% = mute, 5% = -38 dB, 100% = 0 dB, 2.5% = 1 dB); used only while
+# /var/lib/thinksmart/volume does not exist (applications may write the current volume there to keep it across
+# reboots). Set it now with: amixer -c 0 sset 'Speaker Amp Master' $((45 + 4 * percent / 10))
+VOLUME=40
+# Where the volume goes: amplifier ('Speaker Amp Master', default) or softvol (the "Master" control of
+# /etc/asound.conf, for an old driver without hardware volume; chosen automatically in that case).
+#VOLUME_CONTROL=softvol

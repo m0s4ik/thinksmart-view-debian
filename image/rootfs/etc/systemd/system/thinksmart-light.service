@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Light sensor at boot: loads vcnl4000 and declares the VCNL4200 (no device tree node), see driver/vcnl4000.
+[Unit]
+Description=ThinkSmart View light sensor (VCNL4200)
+After=systemd-udev-trigger.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/thinksmart-light
+
+[Install]
+WantedBy=multi-user.target

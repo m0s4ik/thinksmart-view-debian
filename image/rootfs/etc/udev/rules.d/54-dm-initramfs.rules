@@ -1,0 +1,19 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# /boot (p1) and the root file system (p2) are sub-partitions of the "system" partition, mapped with kpartx as
+# device-mapper devices (/dev/dm-0, /dev/dm-1) by the postmarketOS initramfs. That initramfs does not hand its udev
+# database over to Debian (/run/udev is not moved before switch_root), so at coldplug ("add" from
+# systemd-udev-trigger) 55-dm.rules (package dmsetup) rejects these devices as "not activated properly": no
+# /dev/mapper/*, no /dev/disk/by-uuid/* and SYSTEMD_READY=0, i.e. /boot from fstab is never found (emergency mode).
+# Here, only for device-mapper devices udev has never seen during this boot (empty database), with a name, active
+# and with a table, we tell 55-dm.rules they were activated properly (as an initramfs that keeps the udev database
+# would). Other cases (new devices with a cookie, later events) are unchanged.
+# Must sort before 55-dm.rules. Tested with udevadm test (see image/verify.sh).
+SUBSYSTEM!="block", GOTO="dm_initramfs_end"
+KERNEL!="dm-[0-9]*", GOTO="dm_initramfs_end"
+ACTION!="add", GOTO="dm_initramfs_end"
+ENV{DM_COOKIE}=="?*", GOTO="dm_initramfs_end"
+IMPORT{db}="DM_UDEV_RULES_VSN"
+ENV{DM_UDEV_RULES_VSN}=="?*", GOTO="dm_initramfs_end"
+ATTR{dm/name}=="?*", ATTR{dm/suspended}=="0", ATTR{size}!="0", ENV{DM_UDEV_PRIMARY_SOURCE_FLAG}="1"
+LABEL="dm_initramfs_end"

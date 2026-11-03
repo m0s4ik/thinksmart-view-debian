@@ -1,0 +1,125 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Checks on every push and pull request: shell scripts (shellcheck), no private data in the repository, and the
+# TAS5782M driver builds for the postmarketOS 7.1.3 kernel exactly as in driver/tas5782m/README.md. The image itself
+# cannot be built here: it needs kernel parts taken from a device.
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  lint:
+    name: Shell scripts and private data
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+      - name: shellcheck
+        shell: bash
+        run: |
+          files=$(git ls-files | while read -r f; do
+            case "$f" in
+              *.sh) echo "$f" ;;
+              *) if head -n1 "$f" 2>/dev/null | grep -qE '^#!.*/(env )?(ba)?sh'; then echo "$f"; fi ;;
+            esac
+          done)
+          echo "$files"
+          shellcheck -S warning $files
+      - name: No private data
+        env:
+          # optional repository secret: extra literal patterns, one per line (host names, SSIDs, serial numbers)
+          PRIVATE_PATTERNS: ${{ secrets.PRIVATE_PATTERNS }}
+        run: .github/scripts/check-private.sh
+
+  driver:
+    name: Kernel modules for 7.1.3-msm8953 (TAS5782M, VCNL4000)
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    env:
+      KERNEL_TAG: v7.1.3-r0
+      KVER: 7.1.3-msm8953
+      KMAKE: make ARCH=arm64 LLVM=1 LLVM_SUFFIX=-22
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Tools
+        run: |
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            ca-certificates git clang-22 lld-22 llvm-22 make flex bison bc libssl-dev libelf-dev python3 cpio \
+            rsync kmod dwarves
+      - uses: actions/checkout@v7
+      - name: Kernel source
+        run: |
+          git clone -q --depth 1 --branch "$KERNEL_TAG" https://github.com/msm8953-mainline/linux /tmp/kernel
+          rm -rf /tmp/kernel/.git
+          cp kernel/config-$KVER /tmp/kernel/.config
+      - name: olddefconfig and modules_prepare
+        run: |
+          $KMAKE -C /tmp/kernel olddefconfig
+          # the build must not change the options that make the module load: KCFI, BTF, version string
+          diff <(grep -E 'CFI|LOCALVERSION|DEBUG_INFO_BTF' kernel/config-$KVER) \
+               <(grep -E 'CFI|LOCALVERSION|DEBUG_INFO_BTF' /tmp/kernel/.config)
+          $KMAKE -C /tmp/kernel -j"$(nproc)" modules_prepare
+      - name: Build the module
+        run: $KMAKE -C /tmp/kernel -j"$(nproc)" KBUILD_MODPOST_WARN=1 M="$PWD/driver/tas5782m" modules
+      - name: Check the module
+        run: |
+          ko=driver/tas5782m/snd-soc-tas5782m.ko
+          /sbin/modinfo "$ko"
+          /sbin/modinfo -F vermagic "$ko" | grep -q "^$KVER SMP preempt mod_unload aarch64"
+          /sbin/modinfo -F parm "$ko" | grep -q '^volume_mode:'
+          /sbin/modinfo -F parm "$ko" | grep -q '^standby_ms:'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: snd-soc-tas5782m-${{ env.KVER }}
+          path: driver/tas5782m/snd-soc-tas5782m.ko
+          if-no-files-found: error
+      - name: Build the light sensor module (upstream vcnl4000, out of tree)
+        run: |
+          cp /tmp/kernel/drivers/iio/light/vcnl4000.c driver/vcnl4000/
+          $KMAKE -C /tmp/kernel -j"$(nproc)" KBUILD_MODPOST_WARN=1 M="$PWD/driver/vcnl4000" modules
+          /sbin/modinfo -F vermagic driver/vcnl4000/vcnl4000.ko | grep -q "^$KVER SMP preempt mod_unload aarch64"
+          /sbin/modinfo -F alias driver/vcnl4000/vcnl4000.ko | grep -q 'vcnl4200'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: vcnl4000-${{ env.KVER }}
+          path: driver/vcnl4000/vcnl4000.ko
+          if-no-files-found: error
+
+  mesa:
+    name: Reduced Mesa (freedreno) for aarch64
+    runs-on: ubuntu-24.04
+    container: debian:trixie
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - name: Tools
+        run: |
+          dpkg --add-architecture arm64
+          apt-get update -q
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
+            ca-certificates curl xz-utils binutils meson ninja-build python3-mako python3-yaml python3-packaging bison flex \
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config \
+            libdrm-dev:arm64 zlib1g-dev:arm64 libzstd-dev:arm64 libexpat1-dev:arm64
+      - uses: actions/checkout@v7
+      - name: Build
+        run: PARTS_DIR=$PWD/out ./image/build-mesa.sh
+      - name: Check
+        run: |
+          tar tzf out/mesa-freedreno-*-aarch64.tar.gz | tee files.txt
+          grep -q 'opt/mesa-freedreno/lib/gbm/dri_gbm.so' files.txt
+          grep -q 'opt/mesa-freedreno/lib/libEGL.so.1' files.txt
+          ! grep -qi llvm files.txt
+      - uses: actions/upload-artifact@v7
+        with:
+          name: mesa-freedreno-aarch64
+          path: out/mesa-freedreno-*-aarch64.tar.gz
+          if-no-files-found: error

@@ -1,0 +1,7 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# The root file system is already mounted by the postmarketOS initramfs (pmos_root_uuid, after e2fsck).
+# /boot is only needed to change the kernel or extlinux.conf: nofail and a short timeout, so that if the device does
+# not show up (or fsck fails) the system still reaches ssh instead of emergency mode (a dead end without a keyboard).
+UUID=@ROOT_UUID@	/	ext4	defaults,noatime	0	0
+UUID=@BOOT_UUID@	/boot	ext2	defaults,noatime,nofail,x-systemd.device-timeout=15	0	2

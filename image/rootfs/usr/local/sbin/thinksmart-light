@@ -1,0 +1,26 @@
+#!/bin/sh
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Light sensor at boot (run by thinksmart-light.service): the VCNL4200 at 0x51 on the sensor I2C bus has no node in
+# the postmarketOS device tree, so load vcnl4000 (built out of tree, driver/vcnl4000) and declare the chip.
+set -u
+if ! modprobe vcnl4000 2>/dev/null; then
+    echo "vcnl4000 module not installed: no light sensor (see driver/vcnl4000/README.md)"
+    exit 0
+fi
+for bus in /sys/devices/platform/i2c-sensors/i2c-*; do
+    [ -d "$bus" ] || continue
+    n=${bus##*/i2c-}
+    if [ ! -e "$bus/$n-0051" ]; then
+        echo vcnl4200 0x51 > "$bus/new_device"
+    fi
+    for d in /sys/bus/iio/devices/iio:device*; do
+        if [ "$(cat "$d/name" 2>/dev/null)" = vcnl4000 ]; then
+            echo "light sensor: ${d##*/}, illuminance raw $(cat "$d/in_illuminance_raw" 2>/dev/null)"
+            exit 0
+        fi
+    done
+    echo "vcnl4200 declared on i2c-$n but no IIO device: chip not answering?"
+    exit 0
+done
+echo "no i2c-sensors bus: no light sensor"
