@@ -72,6 +72,6 @@ cp -a "$L"/libEGL.so.1* "$L"/libGLESv2.so.2* "$L"/libgallium-"$VER".so "$L"/libg
 cp -a "$L"/gbm/dri_gbm.so pkg/opt/mesa-freedreno/lib/gbm/
 echo /opt/mesa-freedreno/lib > pkg/etc/ld.so.conf.d/mesa-freedreno.conf
 cp "mesa-$VER/docs/license.rst" pkg/opt/mesa-freedreno/LICENSE.rst
-echo "Mesa $VER, freedreno only, built by thinksmart-view-linux image/build-mesa.sh" > pkg/opt/mesa-freedreno/VERSION
+echo "Mesa $VER, freedreno only, built by thinksmart-view-debian image/build-mesa.sh" > pkg/opt/mesa-freedreno/VERSION
 tar czf "$TAR" --owner=0 --group=0 -C pkg .
 echo "done: $TAR ($(du -h "$TAR" | cut -f1), $(du -sh pkg | cut -f1) installed)"

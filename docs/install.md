@@ -21,8 +21,8 @@ firmware and modules come from postmarketOS and from your own device. You build 
 ## 1. Tools
 
 ```bash
-git clone https://github.com/m0s4ik/thinksmart-view-linux.git
-cd thinksmart-view-linux
+git clone https://github.com/m0s4ik/thinksmart-view-debian.git
+cd thinksmart-view-debian
 python3 -m venv ~/edl-venv && ~/edl-venv/bin/pip install git+https://github.com/bkerler/edl
 ```
 

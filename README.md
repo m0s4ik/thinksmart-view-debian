@@ -1,11 +1,11 @@
-# 🖥️ ThinkSmart View Linux
+# 🖥️ ThinkSmart View Debian
 
 Run a minimal **Debian 13** on the **Lenovo ThinkSmart View** (CD-18781Y, the 8" Teams/Zoom desk display), with
 working **screen, touch, speaker, microphones, Wi-Fi and sensors**. No Android, no browser: a clean Linux base with no
 desktop, for whatever you want to build on it — a voice assistant, a smart-home panel, a clock, a kiosk.
 
-[<img src="https://img.shields.io/github/v/release/m0s4ik/thinksmart-view-linux?include_prereleases&logo=github&label=Release">](https://github.com/m0s4ik/thinksmart-view-linux/releases)
-[<img src="https://github.com/m0s4ik/thinksmart-view-linux/actions/workflows/ci.yml/badge.svg">](https://github.com/m0s4ik/thinksmart-view-linux/actions/workflows/ci.yml)
+[<img src="https://img.shields.io/github/v/release/m0s4ik/thinksmart-view-debian?include_prereleases&logo=github&label=Release">](https://github.com/m0s4ik/thinksmart-view-debian/releases)
+[<img src="https://github.com/m0s4ik/thinksmart-view-debian/actions/workflows/ci.yml/badge.svg">](https://github.com/m0s4ik/thinksmart-view-debian/actions/workflows/ci.yml)
 [<img src="https://img.shields.io/badge/Debian-13%20trixie-A81D33?logo=debian&logoColor=white">](https://www.debian.org)
 [<img src="https://img.shields.io/badge/kernel-postmarketOS%207.1.3-009900?logo=linux&logoColor=white">](docs/kernel.md)
 [<img src="https://img.shields.io/badge/arch-arm64-informational">](docs/hardware.md)
@@ -55,8 +55,8 @@ postmarketOS and your own device. After putting the parts in `image/parts/` (ker
 the guide), you build it with one script:
 
 ```bash
-git clone https://github.com/m0s4ik/thinksmart-view-linux.git
-cd thinksmart-view-linux
+git clone https://github.com/m0s4ik/thinksmart-view-debian.git
+cd thinksmart-view-debian
 cp image/config.env.example image/config.env && chmod 600 image/config.env   # Wi-Fi, ssh key, time zone, firewall
 sudo ./image/build.sh image/config.env                                         # ~10 min, ends with VERIFY OK
 ```

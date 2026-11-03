@@ -309,7 +309,7 @@ step "version and cleanup"
 COMMIT=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)
 [ -z "$(git -C "$REPO" status --porcelain 2>/dev/null)" ] || COMMIT="$COMMIT+changes"
 cat > "$R/etc/thinksmart-version" <<EOF
-thinksmart-view-linux, Debian image built on $(date '+%F %T')
+thinksmart-view-debian, Debian image built on $(date '+%F %T')
 repository: $COMMIT
 Debian: $(cat "$R/etc/debian_version") arm64 (systemd $(in_chroot dpkg-query -W -f='${Version}' systemd))
 kernel: $KVER (postmarketOS linux-postmarketos-qcom-msm8953, frozen), postmarketOS initramfs
