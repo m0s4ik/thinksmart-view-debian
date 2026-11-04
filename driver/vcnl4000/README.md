@@ -17,9 +17,20 @@ d=$(grep -l '^vcnl4000$' /sys/bus/iio/devices/iio:device*/name | xargs dirname)
 cat $d/in_illuminance_raw $d/in_illuminance_scale    # lux = raw x scale
 ```
 
-**Light works; proximity reads 0.** The infrared LED of the proximity part has its own supply (`vled`), which the
-Lenovo device tree turns on and the postmarketOS one does not know about, so the driver uses a dummy regulator and
-the LED stays dark. See [docs/known-issues.md](../../docs/known-issues.md).
+**Light and proximity both work.** With the driver's defaults (integration time 1T, one pulse) proximity reads 0
+behind the cover glass, so `thinksmart-light` sets the most sensitive values the driver offers:
+
+```sh
+echo 0.000864 > $d/in_proximity_integration_time   # 9T
+echo 8        > $d/in_proximity_oversampling_ratio  # 8 LED pulses per measurement
+echo 0.200000 > $d/in_proximity_calibbias           # LED current 200 mA
+cat $d/in_proximity_raw                             # counts / 16 (the driver divides by 16)
+```
+
+Measured on our device (counts = raw x 16): ~35 at rest, ~60-100 with a hand at 30 cm, ~100-170 at 10 cm, over 1500
+at 2-3 cm. The IR LED (faintly red to the eye) is on only while the sensor is being read: runtime PM shuts the
+proximity part down between reads, so a program polling it a few times per second keeps it lit, and nothing reading it
+keeps it dark.
 
 ## Building
 

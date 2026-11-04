@@ -30,14 +30,14 @@ application:
 
 | | |
 |---|---|
-| 🪶 **~230 MB of RAM** | used by the whole system, kernel included, with no application running: ~1.7 GB left for yours |
-| 📦 **208 Debian packages** | ~530 MB on disk with kernel modules and GPU drivers; the compressed image is ~190 MB |
+| 🪶 **~190 MB of RAM** | used by the whole system, kernel included, with no application running: ~1.7 GB left for yours |
+| 📦 **208 Debian packages** | ~470 MB on disk with kernel modules and GPU drivers; the compressed image is ~190 MB |
 | ⚙️ **A handful of services** | systemd, journald, udev, NetworkManager, wpa_supplicant, ssh, timesyncd, nftables, plus the audio and light sensor setup. No desktop, no display server, no browser |
-| ⏱️ **~25 s boot** | from power on to ssh (16 s kernel and initramfs, 9 s userspace) |
+| ⏱️ **~24 s boot** | from power on to ssh (16 s kernel and initramfs, 7 s userspace) |
 | 🎮 **GPU without the weight** | Mesa built for this GPU only and without LLVM: ~19 MB instead of the ~170 MB of Debian's Mesa |
 | 🧱 **Plain Debian** | apt and Debian's security updates, systemd, nothing custom to learn; the whole image comes from one script you can read |
 
-<sub>Measured on our device on 2026-11-03, with no application running (the screenshot above).</sub>
+<sub>Measured on our device on 2026-11-04, right after flashing this image, with no application running (the screenshot above).</sub>
 
 ## What works
 
@@ -49,7 +49,7 @@ application:
 | 🔊 **Speaker** | TAS5782M amplifier with the out-of-tree driver, hardware volume (`Speaker Amp Master`) |
 | 🎙️ **Microphones** | two digital microphones, ready for wake word and speech recognition |
 | 📶 **Wi-Fi** | QCA9379 (ath10k), NetworkManager profile from the build config |
-| 🧭 **Sensors and keys** | BMA253 accelerometer (rotation), VCNL4200 ambient light, Vol+ / Vol− keys, camera shutter switch |
+| 🧭 **Sensors and keys** | BMA253 accelerometer (rotation), VCNL4200 ambient light and proximity, Vol+ / Vol− keys, camera shutter switch |
 | 🔒 **Access** | ssh with keys only, nftables firewall open only to your LAN |
 | 🚀 **Headless boot** | ready in ~25 s, survives without a keyboard (no emergency-mode dead ends) |
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
@@ -95,7 +95,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 ## Roadmap
 
 - [x] Debian 13 image on the postmarketOS 7.1.3 kernel, headless boot
-- [x] Speaker, microphones, Wi-Fi, touch, accelerometer, light sensor, keys
+- [x] Speaker, microphones, Wi-Fi, touch, accelerometer, light and proximity sensor, keys
 - [x] Customization hook for applications
 - [x] Hardware volume of the TAS5782M amplifier
 - [ ] Faster boot (initramfs framebuffer wait)

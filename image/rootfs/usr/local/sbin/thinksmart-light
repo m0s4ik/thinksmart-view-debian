@@ -3,6 +3,9 @@
 # SPDX-FileCopyrightText: 2026 Andrea Mattera
 # Light sensor at boot (run by thinksmart-light.service): the VCNL4200 at 0x51 on the sensor I2C bus has no node in
 # the postmarketOS device tree, so load vcnl4000 (built out of tree, driver/vcnl4000) and declare the chip.
+# Then set the proximity part to its most sensitive setting: with the driver's defaults (integration 1T, one pulse) it
+# reads 0 behind the cover glass. The IR LED is only on while someone reads the sensor (runtime PM), so this costs
+# nothing at rest.
 set -u
 if ! modprobe vcnl4000 2>/dev/null; then
     echo "vcnl4000 module not installed: no light sensor (see driver/vcnl4000/README.md)"
@@ -16,6 +19,10 @@ for bus in /sys/devices/platform/i2c-sensors/i2c-*; do
     fi
     for d in /sys/bus/iio/devices/iio:device*; do
         if [ "$(cat "$d/name" 2>/dev/null)" = vcnl4000 ]; then
+            # 9T integration, 8 pulses, 200 mA LED: ~35 counts at rest, ~60-170 for a hand at 10-30 cm, >1500 at 2 cm
+            echo 0.000864 > "$d/in_proximity_integration_time" 2>/dev/null
+            echo 8 > "$d/in_proximity_oversampling_ratio" 2>/dev/null
+            echo 0.200000 > "$d/in_proximity_calibbias" 2>/dev/null
             echo "light sensor: ${d##*/}, illuminance raw $(cat "$d/in_illuminance_raw" 2>/dev/null)"
             exit 0
         fi

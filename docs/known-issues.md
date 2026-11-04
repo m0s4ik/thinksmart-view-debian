@@ -29,6 +29,10 @@
 - lk2nd supports a **single entry** in `extlinux.conf`.
 - Harmless messages: `Failed to set OPP config` on cpu0, `psci: failed to set PC mode`, `venus` -5.
 - No suspend.
+- **`poweroff` turns the device back on** after a few seconds while the power supply is plugged in (there is no
+  battery and no power button). To switch it off: `poweroff`, then unplug the power within ~10 s.
+- **No battery-backed clock**: until `systemd-timesyncd` gets the time from the network, the clock starts from the
+  last saved time, so the first lines of each boot in the journal can carry an old date.
 
 ## Screen
 
@@ -40,8 +44,10 @@
 
 ## Sensors
 
-- Proximity always reads 0: the VCNL4200 IR LED supply (`vled`) is missing from the postmarketOS device tree, so
-  the driver uses a dummy regulator. The ambient light part works ([driver/vcnl4000](../driver/vcnl4000/README.md)).
+- Proximity is short-range: behind the cover glass it reads ~35 at rest, ~60-100 for a hand at 30 cm, ~100-170 at
+  10 cm and over 1500 at 2-3 cm (with the settings `thinksmart-light.service` applies, see
+  [driver/vcnl4000](../driver/vcnl4000/README.md)). Reliable for "a hand in front of the screen", not for "someone in
+  the room". With the driver's own defaults it reads 0.
 
 ## Not done yet
 
