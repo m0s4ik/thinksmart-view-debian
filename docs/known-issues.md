@@ -35,8 +35,8 @@
   -110` while leaving the access point.
 - **`poweroff` turns the device back on** about 25 s later while the power supply is plugged in: there is no battery
   and no power button, so the PMIC takes the supply itself as a power-on event (CBLPWR_N). For "off" in daily use,
-  suspend it instead (above): a volume key brings it back. To switch it off for unplugging, run `systemctl halt` (the screen goes black and nothing restarts), then unplug the supply; wait ~30 s before
-  plugging it back in. An experimental module that keeps `poweroff` off is in
+  suspend it instead (above): a volume key brings it back. To switch it off for unplugging, run `systemctl halt`
+  (the screen goes black and nothing restarts), then unplug the supply; wait ~30 s before plugging it back in. An experimental module that keeps `poweroff` off is in
   [driver/thinksmart-poweroff](../driver/thinksmart-poweroff/README.md), not tested yet.
 - **No battery-backed clock**: until `systemd-timesyncd` gets the time from the network, the clock starts from the
   last saved time, so the first lines of each boot in the journal can carry an old date.
