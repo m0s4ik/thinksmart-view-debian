@@ -120,7 +120,7 @@ sudo dpkg --add-architecture arm64 && sudo apt update
 sudo apt install --no-install-recommends ca-certificates curl xz-utils binutils meson ninja-build \
   python3-mako python3-yaml python3-packaging bison flex gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config \
   dpkg-dev libwayland-bin libwayland-dev libdrm-dev:arm64 zlib1g-dev:arm64 libzstd-dev:arm64 libexpat1-dev:arm64 \
-  libwayland-dev:arm64 libwayland-egl-backend-dev:arm64
+  libwayland-dev:arm64 libwayland-egl-backend-dev:arm64 libglvnd-dev:arm64
 ./image/build-mesa.sh        # as a normal user, ~10 min
 ```
 

@@ -28,7 +28,7 @@
 #   apt install --no-install-recommends ca-certificates curl xz-utils binutils meson ninja-build python3-mako
 #     python3-yaml python3-packaging bison flex gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config dpkg-dev
 #     libwayland-bin libwayland-dev libdrm-dev:arm64 zlib1g-dev:arm64 libzstd-dev:arm64 libexpat1-dev:arm64
-#     libwayland-dev:arm64 libwayland-egl-backend-dev:arm64
+#     libwayland-dev:arm64 libwayland-egl-backend-dev:arm64 libglvnd-dev:arm64
 #   (native build on arm64: the same without the :arm64 suffixes and with gcc g++ instead of the cross compilers)
 # Mesa 26.x bundles wayland-protocols 1.49, whose XML Debian 13's wayland-scanner (1.23) rejects in --strict mode:
 # with a scanner older than 1.24 the build runs it through a small wrapper that drops --strict (same generated code).
