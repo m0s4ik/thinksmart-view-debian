@@ -111,19 +111,25 @@ jobs:
           apt-get update -q
           DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
             ca-certificates curl xz-utils binutils meson ninja-build python3-mako python3-yaml python3-packaging bison flex \
-            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config \
-            libdrm-dev:arm64 zlib1g-dev:arm64 libzstd-dev:arm64 libexpat1-dev:arm64
+            gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config dpkg-dev libwayland-bin libwayland-dev \
+            libdrm-dev:arm64 zlib1g-dev:arm64 libzstd-dev:arm64 libexpat1-dev:arm64 \
+            libwayland-dev:arm64 libwayland-egl-backend-dev:arm64
       - uses: actions/checkout@v7
       - name: Build
         run: PARTS_DIR=$PWD/out ./image/build-mesa.sh
       - name: Check
         run: |
-          tar tzf out/mesa-freedreno-*-aarch64.tar.gz | tee files.txt
-          grep -q 'opt/mesa-freedreno/lib/gbm/dri_gbm.so' files.txt
-          grep -q 'opt/mesa-freedreno/lib/libEGL.so.1' files.txt
+          deb=$(ls out/mesa-freedreno_*_arm64.deb)
+          dpkg-deb -I "$deb"
+          dpkg-deb -c "$deb" | tee files.txt
+          grep -q 'usr/lib/aarch64-linux-gnu/gbm/dri_gbm.so' files.txt
+          grep -q 'usr/lib/aarch64-linux-gnu/libEGL_mesa.so.0' files.txt
+          grep -q 'usr/share/glvnd/egl_vendor.d/50_mesa.json' files.txt
+          dpkg-deb -f "$deb" Provides | grep -q 'libgbm1 (='
           ! grep -qi llvm files.txt
+          ! dpkg-deb -f "$deb" Depends | grep -qi llvm
       - uses: actions/upload-artifact@v7
         with:
           name: mesa-freedreno-aarch64
-          path: out/mesa-freedreno-*-aarch64.tar.gz
+          path: out/mesa-freedreno_*_arm64.deb
           if-no-files-found: error

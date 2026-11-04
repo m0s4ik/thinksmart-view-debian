@@ -5,7 +5,8 @@
 #   bash image/verify.sh <image> [sectors]        (run by build.sh before compressing)
 # Opens the image read-only through loop devices and checks: size, MBR, p1 features (lk2nd), UUIDs in extlinux.conf
 # and fstab, the TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile,
-# Python and the ALSA configuration (through qemu).
+# Python and the ALSA configuration (through qemu); the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
+# EGL and GBM loaded through qemu) and the web layer when /etc/thinksmart-version says it is on.
 # Headless boot: dmsetup and the device-mapper udev rules, /boot nofail (fstab generator of the image), and a test
 # device-mapper on p1 (read-only, removed at the end) run through `udevadm test` with the rules of the image and an
 # empty udev database, as after switch_root from the postmarketOS initramfs.
@@ -43,6 +44,8 @@ loop_attach() {  # loop_attach IMG START SIZE [losetup options]: one partition (
 }
 inside() { chroot "$V" /usr/bin/env -i PATH=/usr/sbin:/usr/bin HOME=/tmp LANG=C.UTF-8 PYTHONDONTWRITEBYTECODE=1 "$@"; }
 enabled() { systemctl --root="$V" is-enabled "$1" 2>/dev/null; }
+dpkgq() { dpkg-query --admindir="$V/var/lib/dpkg" "$@" 2>/dev/null; }
+installed() { dpkgq -W -f='${db:Status-Abbrev}' "$1" | grep -q '^ii'; }
 
 echo "Verifying $IMG"
 size=$(stat -c %s "$IMG")
@@ -147,10 +150,6 @@ echo "-- modules, firmware, UCM"
 MD=$V/usr/lib/modules/$KVER
 grep -q '^extra/snd-soc-tas5782m.ko:' "$MD/modules.dep" && ok "modules.dep: extra/snd-soc-tas5782m.ko" || no "modules.dep without tas5782m"
 grep -q 'tas5782m' "$MD/modules.alias" && ok "modules.alias: tas5782m" || no "modules.alias without tas5782m"
-check "GPU: reduced Mesa (libgallium, EGL, GLES, GBM) in /opt/mesa-freedreno" test -s "$V/opt/mesa-freedreno/lib/gbm/dri_gbm.so"
-check "GPU: /opt/mesa-freedreno/lib in ld.so.conf.d" grep -qx /opt/mesa-freedreno/lib "$V/etc/ld.so.conf.d/mesa-freedreno.conf"
-grep -q "/opt/mesa-freedreno/lib/libEGL.so.1" "$V/etc/ld.so.cache" && ok "GPU: libEGL.so.1 in ld.so.cache" || no "GPU: libEGL.so.1 not in ld.so.cache"
-[ -z "$(find "$V/usr/lib" -maxdepth 2 -name "libLLVM*" -o -maxdepth 2 -name "libgallium*" 2>/dev/null)" ] && ok "GPU: no Debian Mesa/LLVM" || no "GPU: Debian Mesa or LLVM installed next to the reduced Mesa"
 grep -aq 'parm=volume_mode:' "$MD/extra/snd-soc-tas5782m.ko" && ok "tas5782m with hardware volume" || no "tas5782m is the old driver (no hardware volume)"
 [ -z "$(find "$MD/extra" -name "*dbg*")" ] && ok "no -dbg module" || no "-dbg module present"
 grep -q '^kernel/drivers/net/wireless/ath/ath10k/ath10k_sdio.ko' "$MD/modules.dep" && ok "modules.dep: ath10k_sdio" || no "ath10k_sdio"
@@ -177,6 +176,47 @@ for f in conf.d/cd-18781y/cd-18781y.conf Lenovo/cd-18781y/HiFi.conf lib/card-ini
     check "UCM $f" test -s "$V/usr/share/alsa/ucm2/$f"
 done
 check "softvol speaker in /etc/asound.conf" grep -q 'Master Playback Volume' "$V/etc/asound.conf"
+
+echo "-- GPU: reduced Mesa"
+ML=$V/usr/lib/aarch64-linux-gnu
+if installed mesa-freedreno; then ok "mesa-freedreno $(dpkgq -W -f='${Version}' mesa-freedreno) installed"; else no "mesa-freedreno not installed"; fi
+for f in libEGL_mesa.so.0 libgbm.so.1 gbm/dri_gbm.so; do
+    check "/usr/lib/aarch64-linux-gnu/$f" test -s "$ML/$f"
+done
+check "libglvnd vendor: /usr/share/glvnd/egl_vendor.d/50_mesa.json -> libEGL_mesa.so.0" \
+    grep -q '"libEGL_mesa.so.0"' "$V/usr/share/glvnd/egl_vendor.d/50_mesa.json"
+for p in libglvnd0 libegl1 libgles2; do
+    if installed $p; then ok "$p (libglvnd) $(dpkgq -W -f='${Version}' $p)"; else no "$p not installed"; fi
+done
+prov=$(dpkgq -W -f='${Provides}' mesa-freedreno)
+for p in libgbm1 libegl-mesa0 libglx-mesa0; do
+    echo "$prov" | grep -qw "$p" && ok "$p provided by mesa-freedreno" || no "$p not provided by mesa-freedreno"
+done
+grep -aq "/usr/lib/aarch64-linux-gnu/gbm" "$ML/libgbm.so.1" && ok "libgbm looks for its backend in /usr/lib/aarch64-linux-gnu/gbm" \
+    || no "libgbm built for another path (its backend would not be found)"
+debmesa=$(dpkgq -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" {print $2}' |
+    grep -E '^(libllvm|libgl1-mesa-dri|mesa-libgallium|libegl-mesa0|libglx-mesa0|libgbm1|mesa-)' | grep -vx mesa-freedreno)
+llvm=$(find "$V/usr/lib" -name "libLLVM*" 2>/dev/null | head -n1)
+[ -z "$debmesa$llvm" ] && ok "no Debian Mesa or LLVM" || no "Debian Mesa or LLVM installed: $debmesa $llvm"
+[ ! -e "$V/opt/mesa-freedreno" ] && [ ! -e "$V/etc/ld.so.conf.d/mesa-freedreno.conf" ] && ok "no Mesa left in /opt" || no "old Mesa in /opt/mesa-freedreno"
+
+echo "-- web layer"
+if grep -q '^web layer: WPE' "$V/etc/thinksmart-version"; then
+    WEB=1
+    for p in libwpewebkit-2.0-1 bubblewrap xdg-dbus-proxy libgl1; do
+        if installed $p; then ok "$p $(dpkgq -W -f='${Version}' $p)"; else no "$p not installed"; fi
+    done
+    case "$(dpkgq -W -f='${Version}' libwpewebkit-2.0-1)" in
+        2.5[4-9]*|2.[6-9]*) ok "WPE WebKit 2.54 or newer (2.48 cannot use Mesa 26)" ;;
+        *) no "WPE WebKit older than 2.54" ;;
+    esac
+    check "bwrap" test -x "$V/usr/bin/bwrap"
+    grep -q '^CONFIG_USER_NS=y' "$V/boot/config" && ok "kernel with user namespaces (WebKit's bubblewrap sandbox)" || no "kernel without CONFIG_USER_NS"
+else
+    WEB=0
+    pkgs=$(dpkgq -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" {print $2}' | grep -E '^(libwpewebkit|bubblewrap$|libgstreamer)')
+    [ -z "$pkgs" ] && ok "web layer off: no WPE WebKit, bubblewrap or GStreamer" || no "web layer off but installed: $pkgs"
+fi
 
 echo "-- services"
 for s in NetworkManager ssh systemd-timesyncd nftables msm-firmware-loader thinksmart-audio thinksmart-light; do
@@ -214,7 +254,7 @@ if [ -e "$MD/extra/vcnl4000.ko" ]; then
 else
     echo "  skip  no vcnl4000.ko: image without the light sensor (optional)"
 fi
-echo "  used: root $(du -sh --exclude=boot "$V" 2>/dev/null | cut -f1), /boot $(du -sh "$V/boot" | cut -f1)"
+echo "  used: root $(du -sh --exclude=boot "$V" 2>/dev/null | cut -f1), /boot $(du -sh "$V/boot" | cut -f1); $(dpkgq -W -f='${db:Status-Abbrev}\n' | grep -c '^ii') packages"
 
 echo "-- inside the image (arm64 through qemu)"
 mount -t proc proc "$V/proc"
@@ -232,6 +272,32 @@ grep -qs '^JobRunningTimeoutSec=15$' "$G"/*.device.d/50-device-timeout.conf && o
 inside /usr/bin/python3 -c "import venv, ssl, sqlite3" 2>/dev/null && ok "python3 with venv (for applications)" || no "python3"
 inside /usr/bin/aplay -L > "$V/tmp/pcm.txt" 2>&1; grep -q '^speaker$' "$V/tmp/pcm.txt" && grep -q '^default$' "$V/tmp/pcm.txt" \
     && ok "ALSA pcms speaker and default (asound.conf parsed)" || { no "ALSA pcms"; head -5 "$V/tmp/pcm.txt"; }
+
+# EGL through libglvnd: the client extensions come from the vendors it found, so Mesa's must be among them
+cat > "$V/tmp/egl.py" <<'EOF'
+import ctypes
+egl = ctypes.CDLL("libEGL.so.1")
+egl.eglQueryString.restype = ctypes.c_char_p
+egl.eglQueryString.argtypes = [ctypes.c_void_p, ctypes.c_int]
+print((egl.eglQueryString(None, 0x3055) or b"").decode())  # EGL_EXTENSIONS of EGL_NO_DISPLAY
+ctypes.CDLL("libGLESv2.so.2")
+ctypes.CDLL("libgbm.so.1")
+ctypes.CDLL("/usr/lib/aarch64-linux-gnu/gbm/dri_gbm.so")
+print("gbm ok")
+EOF
+out=$(inside /usr/bin/python3 /tmp/egl.py 2>&1)
+if echo "$out" | grep -q 'EGL_MESA_platform_gbm' && echo "$out" | grep -Eq 'EGL_(KHR|EXT)_platform_wayland'; then
+    ok "EGL loads Mesa through libglvnd (platforms gbm and wayland)"
+else
+    no "EGL: Mesa vendor not loaded"; echo "$out" | head -3 | sed 's/^/        /'
+fi
+echo "$out" | grep -q '^gbm ok$' && ok "GLESv2, GBM and its backend dri_gbm.so load" || no "GBM or GLESv2 do not load"
+libs="libEGL.so.1 libGLESv2.so.2 libEGL_mesa.so.0 libgbm.so.1 gbm/dri_gbm.so"
+[ "$WEB" = 1 ] && libs="$libs libWPEWebKit-2.0.so.1 wpe-webkit-2.0/WPEWebProcess wpe-webkit-2.0/WPENetworkProcess libgstgl-1.0.so.0"
+for f in $libs; do
+    nf=$(inside /usr/bin/ldd "/usr/lib/aarch64-linux-gnu/$f" 2>&1 | grep -E 'not found|No such file|not a dynamic')
+    [ -z "$nf" ] && ok "ldd $f: every library found" || no "ldd $f: $nf"
+done
 
 echo
 sed 's/^/  /' "$V/etc/thinksmart-version"

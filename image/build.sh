@@ -13,7 +13,9 @@
 # Inputs:  config.env (see config.env.example: Wi-Fi, ssh key, root password, ...)
 #          $PARTS_DIR  device files (docs/kernel.md): boot.tar, modules-7.1.3-msm8953.tar, firmware.tar, ucm.tar,
 #                      snd-soc-tas5782m.ko
+#                      mesa-freedreno_<ver>_arm64.deb (image/build-mesa.sh)
 #                      vcnl4000.ko (optional, light sensor: driver/vcnl4000)
+#                      libwpewebkit-2.0-1_<ver>_arm64.deb (only with WEB=1: image/build-wpe.sh)
 #          image/rootfs/ of this repository, and optionally the CUSTOMIZE script
 # Output:  $WORK_DIR/out/thinksmart-debian-YYYYMMDD.img (sparse) + .img.gz + .sha256
 #
@@ -39,6 +41,7 @@ LAN_V6=${LAN_V6:-fc00::/7, fe80::/10}
 LAN_TCP_PORTS=${LAN_TCP_PORTS:-22}
 SYSTEM_SECTORS=${SYSTEM_SECTORS:-14280671}
 CUSTOMIZE=${CUSTOMIZE:-}
+WEB=${WEB:-0}
 DEBIAN_MIRROR=${DEBIAN_MIRROR:-http://deb.debian.org/debian}
 cd "$REPO"
 P=$(cd "${PARTS_DIR:-image/parts}" && pwd)
@@ -59,7 +62,7 @@ PACKAGES="systemd systemd-sysv systemd-timesyncd udev kmod dbus
   network-manager wpasupplicant openssh-server nftables
   alsa-utils alsa-ucm-conf python3 python3-venv python3-pip
   iproute2 iputils-ping iw curl ca-certificates less vim-tiny procps tzdata locales e2fsprogs
-  fonts-dejavu-core dmsetup libdrm2 libzstd1 zlib1g"
+  fonts-dejavu-core dmsetup"
 # dmsetup: udev rules of device-mapper (55-dm.rules, 60-persistent-storage-dm.rules). /boot and the root file system
 # are device-mapper devices (kpartx in the initramfs): without them, no /dev/disk/by-uuid for /boot and emergency mode
 # at boot. The postmarketOS initramfs also needs rootfs/etc/udev/rules.d/54-dm-initramfs.rules (docs/boot.md).
@@ -102,8 +105,19 @@ install_file() {  # install_file SRC DEST: keeps the executable bit
 
 # --- checks --------------------------------------------------------------------------------------------------------
 [ "$(id -u)" = 0 ] || { echo "must be run as root" >&2; exit 1; }
-MESA_TAR=$(find "$P" -maxdepth 1 -name "mesa-freedreno-*-aarch64.tar.gz" | sort | tail -n1)
-[ -n "$MESA_TAR" ] || { echo "missing $P/mesa-freedreno-*-aarch64.tar.gz: build it with image/build-mesa.sh" >&2; exit 1; }
+MESA_DEB=$(find "$P" -maxdepth 1 -name "mesa-freedreno_*_arm64.deb" | sort -V | tail -n1)
+if [ -z "$MESA_DEB" ]; then
+    echo "missing $P/mesa-freedreno_*_arm64.deb: build it with image/build-mesa.sh" >&2
+    [ -z "$(find "$P" -maxdepth 1 -name "mesa-freedreno-*.tar.gz")" ] || \
+        echo "(the mesa-freedreno-*.tar.gz there is the old format, installed in /opt: rebuild)" >&2
+    exit 1
+fi
+case "$WEB" in
+    0|"") WEB=0 ;;
+    1)  WPE_DEB=$(find "$P" -maxdepth 1 -name "libwpewebkit-2.0-1_*_arm64.deb" | sort -V | tail -n1)
+        [ -n "$WPE_DEB" ] || { echo "WEB=1 but no $P/libwpewebkit-2.0-1_*_arm64.deb: build it with image/build-wpe.sh" >&2; exit 1; } ;;
+    *)  echo "WEB must be 0 or 1" >&2; exit 1 ;;
+esac
 for f in boot.tar modules-$KVER.tar firmware.tar ucm.tar snd-soc-tas5782m.ko; do
     [ -s "$P/$f" ] || { echo "missing $P/$f (see docs/kernel.md)" >&2; exit 1; }
 done
@@ -165,6 +179,18 @@ install -m 0644 "$FS/etc/apt/apt.conf.d/90thinksmart" "$R/etc/apt/apt.conf.d/90t
 mount --bind "$C/apt" "$R/var/cache/apt/archives"
 in_chroot apt-get update -q
 in_chroot apt-get install -y -q --no-install-recommends $PACKAGES
+# GPU: reduced Mesa (freedreno, EGL/GBM/GLES through libglvnd, no LLVM), see image/build-mesa.sh. It provides
+# libgbm1 and libegl-mesa0, so neither this nor anything installed later pulls Debian's Mesa and LLVM.
+cp "$MESA_DEB" "$R/tmp/"
+in_chroot apt-get install -y -q --no-install-recommends "/tmp/$(basename "$MESA_DEB")"
+if [ "$WEB" = 1 ]; then
+    # web layer: WPE WebKit and what apt pulls with it (bubblewrap and xdg-dbus-proxy for its sandbox, GStreamer,
+    # ICU, libsoup, glib-networking, libglvnd's libgl1 for GStreamer's GL library); nothing when WEB=0
+    step "web layer: $(basename "$WPE_DEB")"
+    cp "$WPE_DEB" "$R/tmp/"
+    in_chroot apt-get install -y -q --no-install-recommends "/tmp/$(basename "$WPE_DEB")"
+fi
+rm -f "$R"/tmp/*.deb
 in_chroot apt-get -y -q dist-upgrade
 umount "$R/var/cache/apt/archives"
 
@@ -270,8 +296,6 @@ if [ -s "$P/vcnl4000.ko" ]; then
 else
     echo "NOTE: no $P/vcnl4000.ko: image without the light sensor (see driver/vcnl4000/README.md)"
 fi
-# GPU: reduced Mesa (freedreno, EGL, GBM, GLES, no LLVM) in /opt/mesa-freedreno, see image/build-mesa.sh
-tar -xzf "$MESA_TAR" -C "$R" --no-same-owner
 in_chroot ldconfig
 in_chroot depmod -a "$KVER"
 # BMA253 accelerometer (screen rotation): normally udev loads it from the device tree alias
@@ -313,6 +337,8 @@ thinksmart-view-debian, Debian image built on $(date '+%F %T')
 repository: $COMMIT
 Debian: $(cat "$R/etc/debian_version") arm64 (systemd $(in_chroot dpkg-query -W -f='${Version}' systemd))
 kernel: $KVER (postmarketOS linux-postmarketos-qcom-msm8953, frozen), postmarketOS initramfs
+Mesa: $(in_chroot dpkg-query -W -f='${Version}' mesa-freedreno) (mesa-freedreno, freedreno only, libglvnd vendor)
+web layer: $([ "$WEB" = 1 ] && in_chroot dpkg-query -W -f='WPE WebKit ${Version}' libwpewebkit-2.0-1 || echo off)
 ${EXTRA:-customization: none}
 UUID: boot $BOOT_UUID  root $ROOT_UUID
 EOF
