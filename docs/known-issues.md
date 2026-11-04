@@ -28,9 +28,16 @@
   Untested; a broken initramfs needs EDL to recover.
 - lk2nd supports a **single entry** in `extlinux.conf`.
 - Harmless messages: `Failed to set OPP config` on cpu0, `psci: failed to set PC mode`, `venus` -5.
-- No suspend.
-- **`poweroff` turns the device back on** after a few seconds while the power supply is plugged in (there is no
-  battery and no power button). To switch it off: `poweroff`, then unplug the power within ~10 s.
+- **Suspend works** (`systemctl suspend`, s2idle, the only mode the kernel offers): screen off, under 0.5 W at the
+  wall (a smart plug with 1 W resolution reads 0 W, against ~1 W idle with the screen on), Wi-Fi off. **Vol+ and Vol−
+  wake it** within a second or two, and so does an RTC alarm (`rtcwake -m freeze -s <seconds>`); Wi-Fi reconnects by
+  itself a few seconds later. Tested on 2026-11-04. Logged at suspend, harmless: ath10k `failed to install key ...
+  -110` while leaving the access point.
+- **`poweroff` turns the device back on** about 25 s later while the power supply is plugged in: there is no battery
+  and no power button, so the PMIC takes the supply itself as a power-on event (CBLPWR_N). For "off" in daily use,
+  suspend it instead (above): a volume key brings it back. To switch it off for unplugging, run `systemctl halt` (the screen goes black and nothing restarts), then unplug the supply; wait ~30 s before
+  plugging it back in. An experimental module that keeps `poweroff` off is in
+  [driver/thinksmart-poweroff](../driver/thinksmart-poweroff/README.md), not tested yet.
 - **No battery-backed clock**: until `systemd-timesyncd` gets the time from the network, the clock starts from the
   last saved time, so the first lines of each boot in the journal can carry an old date.
 

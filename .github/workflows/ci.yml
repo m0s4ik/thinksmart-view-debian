@@ -92,6 +92,10 @@ jobs:
           name: vcnl4000-${{ env.KVER }}
           path: driver/vcnl4000/vcnl4000.ko
           if-no-files-found: error
+      - name: Build the poweroff module (experimental, driver/thinksmart-poweroff)
+        run: |
+          $KMAKE -C /tmp/kernel -j"$(nproc)" KBUILD_MODPOST_WARN=1 M="$PWD/driver/thinksmart-poweroff" modules
+          /sbin/modinfo -F vermagic driver/thinksmart-poweroff/thinksmart-poweroff.ko | grep -q "^$KVER SMP preempt mod_unload aarch64"
 
   mesa:
     name: Reduced Mesa (freedreno) for aarch64

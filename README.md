@@ -54,7 +54,7 @@ application:
 | 🚀 **Headless boot** | ready in ~25 s, survives without a keyboard (no emergency-mode dead ends) |
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
 
-Not yet: camera (sensor driver missing), suspend. See [known issues](docs/known-issues.md).
+Not yet: camera (sensor driver missing). Suspend works (a volume key wakes it); `poweroff` does not stay off with the power supply plugged in. See [known issues](docs/known-issues.md).
 
 ## Installation
 
