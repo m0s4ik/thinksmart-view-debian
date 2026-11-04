@@ -112,20 +112,25 @@ Build `snd-soc-tas5782m.ko` as described in [driver/tas5782m/README.md](../drive
 
 ## 5. Mesa for the GPU
 
-The image uses a reduced Mesa (freedreno only, no LLVM) built by a script. Install its build dependencies once, as
-root (cross build on x86_64; the list is also at the top of the script):
+The image uses a reduced Mesa (freedreno only, no LLVM) built by a script as a Debian package. Install its build
+dependencies once, as root (cross build on x86_64; the list is also at the top of the script):
 
 ```bash
 sudo dpkg --add-architecture arm64 && sudo apt update
 sudo apt install --no-install-recommends ca-certificates curl xz-utils binutils meson ninja-build \
   python3-mako python3-yaml python3-packaging bison flex gcc-aarch64-linux-gnu g++-aarch64-linux-gnu pkg-config \
-  libdrm-dev:arm64 zlib1g-dev:arm64 libzstd-dev:arm64 libexpat1-dev:arm64
-./image/build-mesa.sh        # as a normal user, ~5 min
+  dpkg-dev libwayland-bin libwayland-dev libdrm-dev:arm64 zlib1g-dev:arm64 libzstd-dev:arm64 libexpat1-dev:arm64 \
+  libwayland-dev:arm64 libwayland-egl-backend-dev:arm64
+./image/build-mesa.sh        # as a normal user, ~10 min
 ```
 
-It writes `image/parts/mesa-freedreno-<version>-aarch64.tar.gz`. You now have six files in `image/parts/`
-(`boot.tar`, `modules-7.1.3-msm8953.tar`, `firmware.tar`, `ucm.tar`, `snd-soc-tas5782m.ko` and the Mesa tarball,
+It writes `image/parts/mesa-freedreno_<version>_arm64.deb`. You now have six files in `image/parts/`
+(`boot.tar`, `modules-7.1.3-msm8953.tar`, `firmware.tar`, `ucm.tar`, `snd-soc-tas5782m.ko` and the Mesa package,
 plus the optional `vcnl4000.ko`); you never need the bootstrap again.
+
+Optional, for applications that show web pages: the **web layer** (`WEB=1` in `config.env`) needs
+`libwpewebkit-2.0-1_*_arm64.deb` in `image/parts/`, built by `image/build-wpe.sh` on a fast arm64 machine with Docker
+(see the top of the script).
 
 ## 6. Build the image
 

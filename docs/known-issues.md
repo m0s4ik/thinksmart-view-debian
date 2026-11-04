@@ -44,8 +44,27 @@
 ## Screen
 
 - `/dev/fb0` (fbdev emulation) has no vsync and no double buffering. For tear-free drawing use DRM/KMS with page
-  flipping through the GPU (reduced Mesa in `/opt/mesa-freedreno`, EGL/GBM); a program must then be DRM master of
-  `/dev/dri/card0` (root, or the `video` group with nobody else holding it).
+  flipping through the GPU (the reduced Mesa, EGL/GBM); a program must then be DRM master of `/dev/dri/card0` (root,
+  or the `video` group with nobody else holding it).
+
+## GPU and web layer
+
+- **Mesa is a release candidate**: v0.3-rc1 ships **Mesa 26.3.0-rc3**, the version WPE WebKit 2.54 was tested with on
+  the device (Mesa 26.3 final was not out yet). v0.3 moves to 26.3.0 final; rebuild with
+  `MESA_VERSION=26.3.0 MESA_SHA256=<sum> ./image/build-mesa.sh` when it is out.
+- **freedreno loops forever on some browser render targets** (Adreno 5xx, GMEM tiling): `layout_gmem()` /
+  `calc_nbins()` in `src/gallium/drivers/freedreno/freedreno_gmem.c` keeps adding bins while a bin does not fit in
+  the 136 KiB of GMEM, and when even the smallest aligned bin does not fit the loop never ends. The thread spins at
+  100 %, the page hangs. Seen with WebKit's GPU 2D canvas, WebGL and, with WPE 2.54, some ordinary Home Assistant
+  dashboards; same in Mesa 25.0.7 and 26.3.0-rc3. Programs with simple surfaces (a Slint or femtovg UI, a compositor)
+  do not hit it. **Workaround**: `FD_MESA_DEBUG=sysmem` (render straight to memory, no tiling) **in the browser's
+  environment only**, e.g. `Environment=FD_MESA_DEBUG=sysmem` in the browser's systemd unit: then the canvas and
+  WebGL work on the GPU. Do not set it system-wide (`/etc/environment`): every other GL program would lose tiling
+  for nothing. A real fix (fall back to sysmem only for the batch that does not fit) is to be proposed to Mesa.
+- **WPE WebKit 2.48** (Debian 13's own) cannot use Mesa 26 (`egl: failed to create dri2 screen`): the web layer
+  uses our 2.54 backport (`image/build-wpe.sh`).
+- **WebKit's sandbox does not see `/opt`**: Mesa and anything the web process loads must live under `/usr`; that is
+  why the image installs Mesa as a package in `/usr/lib/aarch64-linux-gnu` since v0.3.
 - The video decoder `venus` fails to start on 7.1.3 (-5): video is decoded in software.
 - Landscape orientations from the accelerometer are derived from its axes ([hardware.md](hardware.md)), not verified.
 

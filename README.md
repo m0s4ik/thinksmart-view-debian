@@ -2,7 +2,8 @@
 
 Run an **ultra-light Debian 13** on the **Lenovo ThinkSmart View** (CD-18781Y, the 8" Teams/Zoom desk display), with
 working **screen, touch, speaker, microphones, Wi-Fi and sensors**. No Android, no browser: a clean Linux base with no
-desktop, for whatever you want to build on it — a voice assistant, a smart-home panel, a clock, a kiosk.
+desktop, for whatever you want to build on it — a voice assistant, a smart-home panel, a clock, a kiosk. An optional
+web layer (WPE WebKit) is there for applications that need to show web pages.
 
 [<img src="https://img.shields.io/github/v/release/m0s4ik/thinksmart-view-debian?include_prereleases&logo=github&label=Release">](https://github.com/m0s4ik/thinksmart-view-debian/releases)
 [<img src="https://github.com/m0s4ik/thinksmart-view-debian/actions/workflows/ci.yml/badge.svg">](https://github.com/m0s4ik/thinksmart-view-debian/actions/workflows/ci.yml)
@@ -34,7 +35,7 @@ application:
 | 📦 **208 Debian packages** | ~470 MB on disk with kernel modules and GPU drivers; the compressed image is ~190 MB |
 | ⚙️ **A handful of services** | systemd, journald, udev, NetworkManager, wpa_supplicant, ssh, timesyncd, nftables, plus the audio and light sensor setup. No desktop, no display server, no browser |
 | ⏱️ **~24 s boot** | from power on to ssh (16 s kernel and initramfs, 7 s userspace) |
-| 🎮 **GPU without the weight** | Mesa built for this GPU only and without LLVM: ~19 MB instead of the ~170 MB of Debian's Mesa |
+| 🎮 **GPU without the weight** | Mesa built for this GPU only and without LLVM: ~22 MB instead of the ~170 MB of Debian's Mesa |
 | 🧱 **Plain Debian** | apt and Debian's security updates, systemd, nothing custom to learn; the whole image comes from one script you can read |
 
 <sub>Measured on our device on 2026-11-04, right after flashing this image, with no application running (the screenshot above).</sub>
@@ -45,7 +46,8 @@ application:
 |---|---|
 | 🖥️ **Display** | 800×1280 Himax panel, framebuffer `/dev/fb0`, backlight 0-4095 |
 | ✋ **Touch** | Himax touchscreen (evdev) |
-| 🎮 **GPU** | Adreno 506 with a reduced Mesa (freedreno, OpenGL ES 3.1, EGL/GBM, no LLVM): 60 fps with vsync |
+| 🎮 **GPU** | Adreno 506 with a reduced Mesa 26.3 (freedreno, OpenGL ES 3.1, EGL/GBM, Wayland platform, no LLVM): 60 fps with vsync |
+| 🌐 **Web (optional)** | WPE WebKit 2.54 on the GPU with its sandbox, for an application that shows web pages (`WEB=1`) |
 | 🔊 **Speaker** | TAS5782M amplifier with the out-of-tree driver, hardware volume (`Speaker Amp Master`) |
 | 🎙️ **Microphones** | two digital microphones, ready for wake word and speech recognition |
 | 📶 **Wi-Fi** | QCA9379 (ath10k), NetworkManager profile from the build config |
@@ -55,6 +57,21 @@ application:
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
 
 Not yet: camera (sensor driver missing). Suspend works (a volume key wakes it); `poweroff` does not stay off with the power supply plugged in. See [known issues](docs/known-issues.md).
+
+## What's new in v0.3-rc1
+
+> [!IMPORTANT]
+> **Release candidate.** v0.3-rc1 ships **Mesa 26.3.0-rc3**, the version the web layer was tested with on the
+> device; it becomes v0.3 when Mesa 26.3.0 final is out.
+
+- **Mesa 26.3** as a Debian package (`mesa-freedreno`) in `/usr`, behind Debian's libglvnd, with the **Wayland
+  platform** (needed by WPE WebKit). It stands in for Debian's `libgbm1` and `libegl-mesa0`, so apt never pulls
+  Debian's Mesa and LLVM. Still no LLVM, X11, Vulkan or video ([docs/kernel.md](docs/kernel.md#mesa)).
+- **Optional web layer** (`WEB=1`): WPE WebKit 2.54, backported to Debian 13 by `image/build-wpe.sh`, with bubblewrap
+  for its sandbox ([image/README.md](image/README.md#web-layer-optional)). Off by default: the base image stays as it
+  was.
+- Known: freedreno loops forever on some browser render targets; run the web engine with `FD_MESA_DEBUG=sysmem`
+  ([known issues](docs/known-issues.md#gpu-and-web-layer)).
 
 ## Installation
 
@@ -98,6 +115,9 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Speaker, microphones, Wi-Fi, touch, accelerometer, light and proximity sensor, keys
 - [x] Customization hook for applications
 - [x] Hardware volume of the TAS5782M amplifier
+- [x] Mesa 26.3 in `/usr` with the Wayland platform; optional web layer (WPE WebKit 2.54)
+- [ ] Mesa 26.3.0 final (v0.3)
+- [ ] Fix for the freedreno GMEM loop, proposed upstream
 - [ ] Faster boot (initramfs framebuffer wait)
 - [ ] Front camera (S5KC505A)
 - [ ] FT8201 panel variant

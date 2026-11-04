@@ -15,8 +15,8 @@ None of these binaries are in this repository. `image/build.sh` expects them in 
 | `ucm.tar` | UCM profile of the ThinkSmart: `conf.d/cd-18781y`, `Lenovo/cd-18781y`, `codecs/msm8953-wcd` |
 | `snd-soc-tas5782m.ko` | the speaker driver built for this kernel ([driver/tas5782m/README.md](../driver/tas5782m/README.md)) |
 | `vcnl4000.ko` | optional: the light sensor driver built for this kernel ([driver/vcnl4000/README.md](../driver/vcnl4000/README.md)) |
-| `mesa-freedreno-<version>-aarch64.tar.gz` | reduced Mesa for the GPU (freedreno only, EGL, GBM, OpenGL ES, no LLVM, ~19 MB installed), built by `image/build-mesa.sh` |
-| `libwpewebkit-2.0-1_*~bpo13+1_arm64.deb` (+ `-dev`, `wpewebkit-webdriver`) | optional, not used by `build.sh` yet: WPE WebKit 2.54 backported from Debian forky to Debian 13 for a web view on the device (Debian 13's 2.48 cannot use the GPU with Mesa 26), built by `image/build-wpe.sh` on a fast arm64 machine with Docker |
+| `mesa-freedreno_<version>_arm64.deb` | reduced Mesa for the GPU (freedreno only, EGL, GBM, OpenGL ES, Wayland platform, no LLVM, ~22 MB installed), built by `image/build-mesa.sh` (see [Mesa](#mesa) below) |
+| `libwpewebkit-2.0-1_*~bpo13+1_arm64.deb` (+ `-dev`, `wpewebkit-webdriver`) | optional, only for the web layer (`WEB=1`): WPE WebKit 2.54 backported from Debian forky to Debian 13 (Debian 13's 2.48 cannot use the GPU with Mesa 26), built by `image/build-wpe.sh` on a fast arm64 machine with Docker. The image installs only `libwpewebkit-2.0-1` |
 
 ## Getting them (what we did)
 
@@ -37,14 +37,40 @@ None of these binaries are in this repository. `image/build.sh` expects them in 
 4. Reboot; screen, touch and Wi-Fi work on 7.1.3 with the Himax panel.
 5. From the build machine: `./image/fetch-parts.sh user@device` copies the four tar files to `image/parts/`.
 6. Build `snd-soc-tas5782m.ko` (and, optionally, `vcnl4000.ko` for the light sensor) and copy it to `image/parts/`.
-7. Build the reduced Mesa: `./image/build-mesa.sh` (cross-compiles in ~5 minutes; dependencies at the top of the
-   script). It writes `image/parts/mesa-freedreno-<version>-aarch64.tar.gz`. Debian's Mesa is not used because it
-   pulls LLVM (~450 MB); do not install Debian's `libegl1`, `libgbm1` or `libgl1-mesa-dri` on the device next to it.
+7. Build the reduced Mesa: `./image/build-mesa.sh` (cross-compiles in ~10 minutes; dependencies at the top of the
+   script). It writes `image/parts/mesa-freedreno_<version>_arm64.deb`.
 
 The parts do not change between builds: you need the bootstrap only once.
 
 Possible shortcut (not tried): the kernel, firmware and UCM packages are plain `.apk` (tar.gz) files on the
 postmarketOS mirror; only the initramfs is generated on the device by `mkinitfs`.
+
+## Mesa
+
+Debian's Mesa pulls LLVM (~450 MB on disk) and drivers for every GPU. `image/build-mesa.sh` builds **Mesa
+26.3.0-rc3** with only the freedreno Gallium driver, EGL, GBM and OpenGL ES, without LLVM, X11, Vulkan or video
+acceleration, and packs it as `mesa-freedreno_26.3.0~rc3-1_arm64.deb`. The tarball's sha256 is pinned in the script
+(checked against the release signature). v0.3 moves to 26.3.0 final.
+
+- **Wayland platform, always on**: WPE WebKit 2.54 (web layer) creates its EGL displays and buffers through it, also
+  when drawing off screen. Cost: `libwayland-client0`, ~90 KB.
+- **Under `/usr`**, built for `/usr/lib/aarch64-linux-gnu`: WebKit's bubblewrap sandbox does not expose `/opt`, and
+  libgbm looks for its backend (`gbm/dri_gbm.so`) at the path it was built for. Earlier images had Mesa in
+  `/opt/mesa-freedreno` with an `ld.so.conf.d` entry; that is gone.
+- **libglvnd, as in Debian**: Debian's `libegl1`, `libgles2` and `libgl1` are libglvnd dispatchers, and other
+  packages link against them (GStreamer's GL library, needed by WPE, links `libGL.so.1` and `libEGL.so.1`). Our Mesa
+  is built with `-Dglvnd=enabled` and is the vendor behind them (`libEGL_mesa.so.0`,
+  `/usr/share/glvnd/egl_vendor.d/50_mesa.json`). The dispatchers cost ~1 MB; the alternative, a non-glvnd
+  `libEGL.so.1` posing as `libegl1`, would still need libglvnd's `libGL.so.1` for GStreamer, and mixing the two
+  dispatch schemes in one process is fragile.
+- **The package replaces Debian's Mesa**: `mesa-freedreno` provides `libgbm1` (with its own version, so WPE's
+  `libgbm1 (>= 21.3)` is satisfied), `libegl-mesa0` and `libglx-mesa0` (there is no GLX: no X server on the device),
+  and conflicts with `mesa-libgallium` and `libgl1-mesa-dri`. apt therefore never installs Debian's Mesa or LLVM next
+  to it, and refuses a package that really needs them instead of pulling them in.
+- Mesa 26 bundles wayland-protocols 1.49, whose XML Debian 13's `wayland-scanner` (1.23) rejects in `--strict` mode:
+  with a scanner older than 1.24 the script runs it through a small wrapper without `--strict` (found by meson
+  through `PKG_CONFIG_PATH_FOR_BUILD`). The options `gallium-vdpau` and `gallium-xa` no longer exist in Mesa 26.
+- freedreno has a GMEM tiling bug that browsers hit: see [known-issues.md](known-issues.md#gpu-and-web-layer).
 
 ## How the postmarketOS initramfs boots Debian
 

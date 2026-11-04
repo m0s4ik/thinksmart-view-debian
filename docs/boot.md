@@ -24,7 +24,8 @@ its own splash, see below).
 
 Debian 13 trixie arm64, `minbase` + `--no-install-recommends`: systemd, udev, NetworkManager + wpasupplicant,
 OpenSSH, nftables, ALSA utils + UCM, Python 3.13, DejaVu fonts, dmsetup. No desktop, no PipeWire. GPU: reduced Mesa (freedreno, EGL, GBM,
-OpenGL ES, no LLVM) in `/opt/mesa-freedreno`, found through `/etc/ld.so.conf.d/mesa-freedreno.conf`. Journal on disk
+OpenGL ES, no LLVM), the package `mesa-freedreno` in `/usr/lib/aarch64-linux-gnu`, behind Debian's libglvnd
+(`libegl1`, `libgles2`). Optional web layer (`WEB=1`): WPE WebKit 2.54 with bubblewrap. Journal on disk
 (50 MB, kept across reboots). About 600 MB used on root, ~1.6 GB of RAM free.
 
 - **Users**: root only (ssh with keys only; optional password for the login on the screen). Applications create

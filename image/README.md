@@ -14,8 +14,9 @@ built into the image with a [customization script](#customization) or installed 
 - The device files in `image/parts/` ([docs/kernel.md](../docs/kernel.md)): `boot.tar`, `modules-7.1.3-msm8953.tar`,
   `firmware.tar`, `ucm.tar` (with `fetch-parts.sh` from a device running postmarketOS 7.1.3),
   `snd-soc-tas5782m.ko` ([driver/tas5782m](../driver/tas5782m/README.md)) and
-  `mesa-freedreno-<version>-aarch64.tar.gz` (with `build-mesa.sh`, dependencies at the top of the script).
-  Optional: `vcnl4000.ko` ([driver/vcnl4000](../driver/vcnl4000/README.md)).
+  `mesa-freedreno_<version>_arm64.deb` (with `build-mesa.sh`, dependencies at the top of the script).
+  Optional: `vcnl4000.ko` ([driver/vcnl4000](../driver/vcnl4000/README.md)); for the web layer,
+  `libwpewebkit-2.0-1_<version>_arm64.deb` (with `build-wpe.sh`).
 
 ## Build
 
@@ -38,20 +39,44 @@ host keys, so your ssh client does not complain after a reflash) as long as you 
 | `build.sh` | debootstrap, packages, configuration, kernel/modules/firmware/UCM, services, optional customization, image (sfdisk, loop, mkfs, copy), `verify.sh`, compressed copy. A trap unmounts everything if it stops halfway |
 | `verify.sh` | read-only checks of the finished image (see below) |
 | `fetch-parts.sh` | copies kernel, initramfs, DTBs, modules, firmware and UCM from a device running postmarketOS 7.1.3 |
-| `build-wpe.sh` | optional: backports WPE WebKit 2.54 to Debian 13 in a Docker container on a fast arm64 machine (for a web view; not in the image yet) |
+| `build-mesa.sh` | builds the reduced Mesa package `mesa-freedreno` (cross-compiles on x86_64; see [docs/kernel.md](../docs/kernel.md#mesa)) |
+| `build-wpe.sh` | optional: backports WPE WebKit 2.54 to Debian 13 in a Docker container on a fast arm64 machine, for the web layer |
 | `config.env.example` | all settings, with comments |
 | `rootfs/` | files copied as they are into the image (`*.in` are templates) |
 
 ## What is in the image
 
 Debian `minbase` with systemd, NetworkManager, OpenSSH, nftables, ALSA (with the ThinkSmart UCM profile), Python 3
-with venv, DejaVu fonts, a reduced Mesa for the GPU (`/opt/mesa-freedreno`); the kernel, modules (including `snd-soc-tas5782m`), firmware and `msm-firmware-loader`.
-Details in [docs/boot.md](../docs/boot.md).
+with venv, DejaVu fonts, a reduced Mesa for the GPU (package `mesa-freedreno`, Mesa 26.3.0-rc3 behind Debian's
+libglvnd, no LLVM: [docs/kernel.md](../docs/kernel.md#mesa)); the kernel, modules (including `snd-soc-tas5782m`),
+firmware and `msm-firmware-loader`. Details in [docs/boot.md](../docs/boot.md).
 
 - **Audio**: `thinksmart-audio.service` sets up the card at boot. `default` plays on the speaker (volume on the
   amplifier: `amixer -c 0 sset 'Speaker Amp Master' 70`, 0-85) and records from the two microphones; `aplay`/`arecord` work without options.
 - **Network**: one Wi-Fi profile from `config.env`; firewall open only to `LAN_TCP_PORTS` (default 22) from your LAN.
 - **Access**: `ssh root@<device>` with your key; optional root password for a login on the screen with a USB keyboard.
+
+## Web layer (optional)
+
+`WEB=1` in `config.env` installs WPE WebKit 2.54 (`libwpewebkit-2.0-1_*_arm64.deb` from `PARTS_DIR`, built by
+`build-wpe.sh`) and what apt pulls with it: `bubblewrap` and `xdg-dbus-proxy` for WebKit's sandbox, GStreamer, ICU,
+libsoup with `glib-networking`, libglvnd's `libgl1`. It is for an application that shows web pages (a Home Assistant
+dashboard, for example) through its own small WPE program; no browser, compositor or session is installed. With
+`WEB=0` (the default) none of it is in the image.
+
+Measured on test builds of v0.3-rc1 (same configuration, `du` of the root file system as `verify.sh` prints it):
+
+| | packages | root file system | `.img.gz` |
+|---|---|---|---|
+| `WEB=0` | 213 | 467 MB | 182 MB |
+| `WEB=1` | 299 | 772 MB | 292 MB |
+
+WebKit itself is ~130 MB of that, ICU ~38 MB, the speech synthesizer flite (a WebKit dependency) ~27 MB. RAM depends
+on the pages shown: the web engine took ~450-600 MB for a Home Assistant dashboard on the GPU in a test setup on the
+device (not yet measured on this image).
+
+The application should run the web engine with `FD_MESA_DEBUG=sysmem` in its own environment (its systemd unit), not
+system-wide: see [known-issues.md](../docs/known-issues.md#gpu-and-web-layer).
 
 ## Customization
 
@@ -88,10 +113,18 @@ no unit requires `local-fs.target` or `/boot`; a **test device-mapper on p1** ru
 in a mount namespace with the image's rules and an empty `/run/udev` (it must get `/dev/disk/by-uuid/<p1>` and not
 `SYSTEMD_READY=0`); the image's own `systemd-fstab-generator` (through qemu); kernel, initramfs, DTBs; `modules.dep`
 (TAS5782M, ath10k, accelerometer); firmware; UCM; enabled and masked services; keys, Wi-Fi profile (without printing
-the PSK), `nft -c`; inside the image: Python with venv and the ALSA pcms `speaker` and `default`.
+the PSK), `nft -c`; inside the image: Python with venv and the ALSA pcms `speaker` and `default`. GPU: the
+`mesa-freedreno` package, libglvnd's dispatchers and Mesa's vendor file, what the package provides, libgbm's backend
+path, no Debian Mesa or LLVM, `libEGL.so.1` loading Mesa through libglvnd (gbm and wayland platforms) and `ldd` of the
+GL libraries through qemu. Web layer: on (WPE ≥ 2.54, bubblewrap, user namespaces in the kernel, `ldd` of WebKit's
+processes) or off (no WebKit, bubblewrap or GStreamer).
 
 ## After the first boot
 
 - `ssh root@<device>`; versions in `/etc/thinksmart-version`.
 - Volume at boot: `/etc/default/thinksmart-audio` (or write the percent to `/var/lib/thinksmart/volume`).
 - `apt upgrade` is fine: Debian packages do not touch `/boot` or the 7.1.3 modules.
+- From an earlier image (Mesa in `/opt/mesa-freedreno`) to the Mesa package without reflashing (not tried on a
+  device yet; reflashing is the tested way): copy the `.deb` over, then
+  `apt install --no-install-recommends ./mesa-freedreno_*_arm64.deb && rm -rf /opt/mesa-freedreno
+  /etc/ld.so.conf.d/mesa-freedreno.conf && ldconfig`.
