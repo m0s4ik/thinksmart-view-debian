@@ -32,6 +32,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `docs/boot.md`, `docs/hardware.md`, `docs/known-issues.md` | what is in the system, what works, what does not |
 | `image/build.sh` | builds the image (root); `image/verify.sh` checks it read-only (build.sh runs it) |
 | `image/fetch-parts.sh` | copies kernel parts from a device running postmarketOS 7.1.3 |
+| `image/build-wpe.sh` | optional WPE WebKit backport for a web view (Docker on a fast arm64 machine; not used by `build.sh` yet) |
 | `image/config.env.example` | every setting, with comments; copy to `image/config.env` |
 | `image/rootfs/` | files copied into the image |
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |

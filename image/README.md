@@ -38,6 +38,7 @@ host keys, so your ssh client does not complain after a reflash) as long as you 
 | `build.sh` | debootstrap, packages, configuration, kernel/modules/firmware/UCM, services, optional customization, image (sfdisk, loop, mkfs, copy), `verify.sh`, compressed copy. A trap unmounts everything if it stops halfway |
 | `verify.sh` | read-only checks of the finished image (see below) |
 | `fetch-parts.sh` | copies kernel, initramfs, DTBs, modules, firmware and UCM from a device running postmarketOS 7.1.3 |
+| `build-wpe.sh` | optional: backports WPE WebKit 2.54 to Debian 13 in a Docker container on a fast arm64 machine (for a web view; not in the image yet) |
 | `config.env.example` | all settings, with comments |
 | `rootfs/` | files copied as they are into the image (`*.in` are templates) |
 
