@@ -124,7 +124,8 @@ processes) or off (no WebKit, bubblewrap or GStreamer).
 - `ssh root@<device>`; versions in `/etc/thinksmart-version`.
 - Volume at boot: `/etc/default/thinksmart-audio` (or write the percent to `/var/lib/thinksmart/volume`).
 - `apt upgrade` is fine: Debian packages do not touch `/boot` or the 7.1.3 modules.
-- From an earlier image (Mesa in `/opt/mesa-freedreno`) to the Mesa package without reflashing (not tried on a
-  device yet; reflashing is the tested way): copy the `.deb` over, then
+- From v0.2 or earlier (Mesa in `/opt/mesa-freedreno`) to the Mesa package without reflashing (done on a device
+  running v0.2: apt adds libglvnd0, libegl1, libgles2 and libwayland-client0; GPU programs then use the new Mesa
+  with no other change; stop them first, restart them after): copy the `.deb` over, then
   `apt install --no-install-recommends ./mesa-freedreno_*_arm64.deb && rm -rf /opt/mesa-freedreno
   /etc/ld.so.conf.d/mesa-freedreno.conf && ldconfig`.
