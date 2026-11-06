@@ -1,0 +1,13 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+#
+# Inbound firewall rules of applications. Every *.nft file here is included in the input chain of
+# /etc/nftables.conf (table inet filter), after the system's own rules, when nftables starts
+# (systemctl reload nftables after adding one). A file holds plain rule lines of that chain and
+# can use $LAN_V4 and $LAN_V6, the local network of config.env, for example:
+#
+#   ip saddr $LAN_V4 tcp dport { 8080 } accept comment "my application"
+#   ip6 saddr $LAN_V6 tcp dport { 8080 } accept comment "my application (IPv6)"
+#
+# Open only what your application listens on, only from the LAN. A file with an error stops the
+# whole ruleset from loading: check it first with `nft -c -f /etc/nftables.conf`.

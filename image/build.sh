@@ -59,7 +59,7 @@ LOOP1=
 LOOP2=
 
 PACKAGES="systemd systemd-sysv systemd-timesyncd udev kmod dbus
-  network-manager wpasupplicant openssh-server nftables
+  network-manager wpasupplicant openssh-server nftables avahi-daemon
   alsa-utils alsa-ucm-conf python3 python3-venv python3-pip
   iproute2 iputils-ping iw curl ca-certificates less vim-tiny procps tzdata locales e2fsprogs
   fonts-dejavu-core dmsetup"
@@ -200,6 +200,7 @@ step "configuration"
 sed -e "s/@BOOT_UUID@/$BOOT_UUID/; s/@ROOT_UUID@/$ROOT_UUID/" "$FS/etc/fstab.in" > "$R/etc/fstab"
 sed -e "s|@LAN_V4@|{ $LAN_V4 }|; s|@LAN_V6@|{ $LAN_V6 }|; s|@LAN_TCP_PORTS@|{ $(echo "$LAN_TCP_PORTS" | sed 's/[ ,]\{1,\}/, /g') }|g" "$FS/etc/nftables.conf.in" > "$R/etc/nftables.conf"
 chmod 0755 "$R/etc/nftables.conf"
+mkdir -p "$R/etc/nftables.d"
 # no automatic mounts from the GPT of the disk (systemd-gpt-auto-generator): the disk is Android's, with dozens of
 # partitions; a "home"/"srv" type GUID would end up in local-fs.target.requires (emergency mode if it fails)
 mkdir -p "$R/etc/systemd/system-generators"
@@ -310,8 +311,8 @@ tar -xf "$P/ucm.tar" -C "$R/usr/share/alsa/ucm2" --no-same-owner
 
 # --- services ------------------------------------------------------------------------------------------------------
 step "services"
-in_chroot systemctl enable NetworkManager ssh systemd-timesyncd nftables msm-firmware-loader thinksmart-audio \
-    thinksmart-light
+in_chroot systemctl enable NetworkManager ssh systemd-timesyncd nftables avahi-daemon msm-firmware-loader \
+    thinksmart-audio thinksmart-light
 in_chroot systemctl disable NetworkManager-wait-online.service 2>/dev/null || true
 # mixer state is set by thinksmart-audio only: alsactl must not restore a saved volume (or 0) afterwards
 in_chroot systemctl mask alsa-restore.service alsa-state.service

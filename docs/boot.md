@@ -23,7 +23,7 @@ its own splash, see below).
 ## System
 
 Debian 13 trixie arm64, `minbase` + `--no-install-recommends`: systemd, udev, NetworkManager + wpasupplicant,
-OpenSSH, nftables, ALSA utils + UCM, Python 3.13, DejaVu fonts, dmsetup. No desktop, no PipeWire. GPU: reduced Mesa (freedreno, EGL, GBM,
+OpenSSH, nftables, avahi, ALSA utils + UCM, Python 3.13, DejaVu fonts, dmsetup. No desktop, no PipeWire. GPU: reduced Mesa (freedreno, EGL, GBM,
 OpenGL ES, no LLVM), the package `mesa-freedreno` in `/usr/lib/aarch64-linux-gnu`, behind Debian's libglvnd
 (`libegl1`, `libgles2`). Optional web layer (`WEB=1`): WPE WebKit 2.54 with bubblewrap. Journal on disk
 (50 MB, kept across reboots). About 600 MB used on root, ~1.6 GB of RAM free.
@@ -32,7 +32,11 @@ OpenGL ES, no LLVM), the package `mesa-freedreno` in `/usr/lib/aarch64-linux-gnu
   their own users.
 - **Wi-Fi**: one NetworkManager profile from `config.env`, infinite retries, power saving off, optional fixed MAC.
   `NetworkManager-wait-online` is disabled.
-- **Firewall**: inbound only loopback, replies, ICMP, DHCPv6 and port 22 (plus `LAN_TCP_PORTS` of `config.env`) from `LAN_V4`/`LAN_V6`.
+- **Firewall**: inbound only loopback, replies, ICMP, DHCPv6, port 22 (plus `LAN_TCP_PORTS` of `config.env`) and mDNS
+  (UDP 5353) from `LAN_V4`/`LAN_V6`. Applications add their own rules as `/etc/nftables.d/*.nft` (rule lines of the
+  input chain, with `$LAN_V4`/`$LAN_V6`; see the README in that directory), so they bring their ports with them
+  instead of the image's configuration.
+- **mDNS**: `avahi-daemon` answers for `<hostname>.local` and lets applications announce services (AirPlay, …).
 - **Firmware**: `msm-firmware-loader` (copied from postmarketOS 1.5.0, MIT) runs before udev, mounts `modem` and
   `persist` read-only and points the kernel firmware path at their blobs (audio DSP, Wi-Fi, venus).
 - **Audio**: `thinksmart-audio.service` waits for the `cd18781y` card (udev loads `snd-soc-tas5782m`), applies the
@@ -40,7 +44,7 @@ OpenGL ES, no LLVM), the package `mesa-freedreno` in `/usr/lib/aarch64-linux-gnu
   from `/var/lib/thinksmart/volume` or `VOLUME` of `/etc/default/thinksmart-audio`, and leaves the software volume
   (`/etc/asound.conf`, pcm `speaker`, control `Master`, also the `default` pcm) at 100%. `alsa-restore`/`alsa-state` are
   masked.
-- **Services**: `msm-firmware-loader`, `thinksmart-audio`, NetworkManager, ssh, timesyncd, nftables; login on the screen
+- **Services**: `msm-firmware-loader`, `thinksmart-audio`, NetworkManager, ssh, timesyncd, nftables, avahi-daemon; login on the screen
   (`getty@tty1`).
 - **Splash** (optional, done by an application): the screen is free about 17.5 s after the kernel starts. The
   framebuffer is `/dev/fb0` (800×1280, BGRX); a unit with `DefaultDependencies=no` that loads `msm` and the panel

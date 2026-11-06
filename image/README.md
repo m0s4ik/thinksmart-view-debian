@@ -53,7 +53,8 @@ firmware and `msm-firmware-loader`. Details in [docs/boot.md](../docs/boot.md).
 
 - **Audio**: `thinksmart-audio.service` sets up the card at boot. `default` plays on the speaker (volume on the
   amplifier: `amixer -c 0 sset 'Speaker Amp Master' 70`, 0-85) and records from the two microphones; `aplay`/`arecord` work without options.
-- **Network**: one Wi-Fi profile from `config.env`; firewall open only to `LAN_TCP_PORTS` (default 22) from your LAN.
+- **Network**: one Wi-Fi profile from `config.env`; firewall open only to `LAN_TCP_PORTS` (default 22) and mDNS from
+  your LAN, plus what applications add in `/etc/nftables.d/`; `<hostname>.local` through avahi.
 - **Access**: `ssh root@<device>` with your key; optional root password for a login on the screen with a USB keyboard.
 
 ## Web layer (optional)

@@ -141,7 +141,8 @@ nano image/config.env
 ```
 
 Set at least `WIFI_SSID`, `WIFI_PSK`, `WIFI_COUNTRY`, `TIMEZONE`, `SSH_AUTHORIZED_KEYS_FILE` (absolute path such
-as `/home/YOU/.ssh/id_ed25519.pub`: under `sudo`, `$HOME` is root's) and `LAN_V4` (your home network). Optional: `LAN_TCP_PORTS` (ports of your application),
+as `/home/YOU/.ssh/id_ed25519.pub`: under `sudo`, `$HOME` is root's) and `LAN_V4` (your home network). Optional: `LAN_TCP_PORTS` (ports of your application; or let the application install its own
+rules in `/etc/nftables.d/`),
 `ROOT_PASSWORD` (login on the screen with a USB keyboard), `CUSTOMIZE` (a script that adds your application, see
 [image/README.md](../image/README.md#customization)).
 

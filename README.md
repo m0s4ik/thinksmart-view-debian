@@ -33,7 +33,7 @@ application:
 |---|---|
 | 🪶 **~190 MB of RAM** | used by the whole system, kernel included, with no application running: ~1.7 GB left for yours |
 | 📦 **208 Debian packages** | ~470 MB on disk with kernel modules and GPU drivers; the compressed image is ~190 MB |
-| ⚙️ **A handful of services** | systemd, journald, udev, NetworkManager, wpa_supplicant, ssh, timesyncd, nftables, plus the audio and light sensor setup. No desktop, no display server, no browser |
+| ⚙️ **A handful of services** | systemd, journald, udev, NetworkManager, wpa_supplicant, ssh, timesyncd, nftables, avahi (mDNS), plus the audio and light sensor setup. No desktop, no display server, no browser |
 | ⏱️ **~24 s boot** | from power on to ssh (16 s kernel and initramfs, 7 s userspace) |
 | 🎮 **GPU without the weight** | Mesa built for this GPU only and without LLVM: ~22 MB instead of the ~170 MB of Debian's Mesa |
 | 🧱 **Plain Debian** | apt and Debian's security updates, systemd, nothing custom to learn; the whole image comes from one script you can read |

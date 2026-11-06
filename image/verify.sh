@@ -219,7 +219,7 @@ else
 fi
 
 echo "-- services"
-for s in NetworkManager ssh systemd-timesyncd nftables msm-firmware-loader thinksmart-audio thinksmart-light; do
+for s in NetworkManager ssh systemd-timesyncd nftables avahi-daemon msm-firmware-loader thinksmart-audio thinksmart-light; do
     st=$(enabled "$s"); [ "$st" = enabled ] && ok "$s: $st" || no "$s: $st"
 done
 for s in alsa-restore alsa-state; do
@@ -245,6 +245,8 @@ grep -q '^ssid=.' "$WP" && grep -q '^psk=.' "$WP" && grep -q '^autoconnect-retri
 grep -q '^wifi.scan-rand-mac-address=no' "$V/etc/NetworkManager/conf.d/thinksmart.conf" && ok "scans without random MAC" || no "NM conf"
 grep -q '^Storage=persistent' "$V/etc/systemd/journald.conf.d/thinksmart.conf" && ok "journal on disk" || no "journald"
 nft -c -f "$V/etc/nftables.conf" >/dev/null 2>&1 && ok "nftables.conf valid (nft -c)" || no "nftables.conf"
+grep -q '^[[:space:]]*include "/etc/nftables.d/\*.nft"' "$V/etc/nftables.conf" && test -d "$V/etc/nftables.d" \
+    && ok "nftables.d: applications' rules included" || no "nftables.d"
 check "/etc/thinksmart-version" test -s "$V/etc/thinksmart-version"
 grep -q "^VOLUME=" "$V/etc/default/thinksmart-audio" && ok "/etc/default/thinksmart-audio" || no "/etc/default/thinksmart-audio"
 check "thinksmart-audio script" test -x "$V/usr/local/sbin/thinksmart-audio"
