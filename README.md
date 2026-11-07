@@ -7,8 +7,8 @@ panel, a clock, a kiosk. Two optional layers add what some applications need: a 
 pages, and the GStreamer runtime of an AirPlay receiver (UxPlay) for music and screen mirroring.
 
 <p align="center"><img src="docs/images/thinksmart-view.png" width="720" alt="A ThinkSmart View in landscape showing fastfetch: Debian GNU/Linux 13 (trixie) aarch64, kernel 7.1.3-msm8953, GPU freedreno FD506"></p>
-<p align="center"><sub>The ThinkSmart View running this system, with the <code>fastfetch</code> output shown below.
-This project is not affiliated with or endorsed by Lenovo; ThinkSmart is a trademark of its owner.</sub></p>
+<p align="center"><sub>The ThinkSmart View running this system: the real <code>fastfetch</code> output (v0.1, no application
+running). This project is not affiliated with or endorsed by Lenovo; ThinkSmart is a trademark of its owner.</sub></p>
 
 [<img src="https://img.shields.io/github/v/release/m0s4ik/thinksmart-view-debian?include_prereleases&logo=github&label=Release">](https://github.com/m0s4ik/thinksmart-view-debian/releases)
 [<img src="https://github.com/m0s4ik/thinksmart-view-debian/actions/workflows/ci.yml/badge.svg">](https://github.com/m0s4ik/thinksmart-view-debian/actions/workflows/ci.yml)
@@ -26,9 +26,6 @@ This project is not affiliated with or endorsed by Lenovo; ThinkSmart is a trade
 If this project saved you some time, you can also
 [buy me a coffee ☕](https://buymeacoffee.com/m0s4ik): it keeps the next one coming.
 
-<p align="center"><img src="docs/screenshot.png" width="720" alt="fastfetch on the ThinkSmart View: Debian 13 aarch64, kernel 7.1.3-msm8953, GPU freedreno FD506"></p>
-<p align="center"><sub>The real <code>fastfetch</code> output on the device (v0.1, no application running), drawn in landscape with the console font (Terminus).</sub></p>
-
 ## Why this one
 
 Built to be **as light as possible**, so that the 2 GB of RAM and the eight small Cortex-A53 cores are left to your
@@ -44,7 +41,7 @@ application:
 | 🧱 **Plain Debian** | apt and Debian's security updates, systemd, nothing custom to learn; the whole image comes from one script you can read |
 
 <sub>RAM and boot time measured on our device on 2026-11-04, right after flashing v0.1, with no application running
-(the screenshot above; v0.1 had 208 packages, before avahi). Packages and disk: a test build of v0.3-rc3 with the
+(the picture above; v0.1 had 208 packages, before avahi). Packages and disk: a test build of v0.3-rc3 with the
 optional layers off.</sub>
 
 ## What works
