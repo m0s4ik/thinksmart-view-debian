@@ -37,7 +37,8 @@ None of these binaries are in this repository. `image/build.sh` expects them in 
    first), so keep a copy of the old file to go back.
 4. Reboot; screen, touch and Wi-Fi work on 7.1.3 with the Himax panel.
 5. From the build machine: `./image/fetch-parts.sh user@device` copies the four tar files to `image/parts/`.
-6. Build `snd-soc-tas5782m.ko` (and, optionally, `vcnl4000.ko` for the light sensor) and copy it to `image/parts/`.
+6. Build `snd-soc-tas5782m.ko` (and, optionally, `vcnl4000.ko` for the light sensor and `venus-core.ko` for the
+   video decoder) and copy them to `image/parts/`.
 7. Build the reduced Mesa: `./image/build-mesa.sh` (cross-compiles in ~10 minutes; dependencies at the top of the
    script). It writes `image/parts/mesa-freedreno_<version>_arm64.deb`.
 
@@ -67,7 +68,8 @@ acceleration, and packs it as `mesa-freedreno_26.3.0~rc3-1_arm64.deb`. The tarba
 - **The package replaces Debian's Mesa**: `mesa-freedreno` provides `libgbm1` (with its own version, so WPE's
   `libgbm1 (>= 21.3)` is satisfied), `libegl-mesa0` and `libglx-mesa0` (there is no GLX: no X server on the device),
   and conflicts with `mesa-libgallium` and `libgl1-mesa-dri`. apt therefore never installs Debian's Mesa or LLVM next
-  to it, and refuses a package that really needs them instead of pulling them in.
+  to it. A package that really needs them (for example `libgbm-dev`, which wants Debian's exact `libgbm1`) makes apt
+  propose removing `mesa-freedreno` instead: see [known-issues.md](known-issues.md#gpu-and-web-layer).
 - Mesa 26 bundles wayland-protocols 1.49, whose XML Debian 13's `wayland-scanner` (1.23) rejects in `--strict` mode:
   with a scanner older than 1.24 the script runs it through a small wrapper without `--strict` (found by meson
   through `PKG_CONFIG_PATH_FOR_BUILD`). The options `gallium-vdpau` and `gallium-xa` no longer exist in Mesa 26.

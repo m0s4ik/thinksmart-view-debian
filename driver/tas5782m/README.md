@@ -67,7 +67,8 @@ within 30 s, it reboots the device: the new module is already in place. It plays
 ## Usage
 
 - Card `hw:0` (`cd-18781y`): playback `hw:0,0` (MultiMedia1), capture `hw:0,1` (MultiMedia2, 2 channels = DMIC1/DMIC2).
-  S16_LE or S24_LE only.
+  S16_LE or S24_LE only, and S24_LE plays silence (no error): use S16_LE. The image's `/etc/asound.conf` converts
+  everything going through `speaker` and `default` to S16_LE.
 - The UCM profile is in postmarketOS (`soc-qcom-msm8953-ucm`, part of `ucm.tar`):
   `alsaucm -c hw:0 set _verb HiFi set _enadev Speaker set _enadev Microphone` (routes `QUAT_MI2S_RX` ←
   MultiMedia1, `TERT_MI2S_TX` → MultiMedia2, DMICs on the decimators, `TX1/TX2 Digital Volume` 115).

@@ -25,8 +25,9 @@ its own splash, see below).
 Debian 13 trixie arm64, `minbase` + `--no-install-recommends`: systemd, udev, NetworkManager + wpasupplicant,
 OpenSSH, nftables, avahi, ALSA utils + UCM, Python 3.13, DejaVu fonts, dmsetup. No desktop, no PipeWire. GPU: reduced Mesa (freedreno, EGL, GBM,
 OpenGL ES, no LLVM), the package `mesa-freedreno` in `/usr/lib/aarch64-linux-gnu`, behind Debian's libglvnd
-(`libegl1`, `libgles2`). Optional web layer (`WEB=1`): WPE WebKit 2.54 with bubblewrap. Journal on disk
-(50 MB, kept across reboots). About 600 MB used on root, ~1.6 GB of RAM free.
+(`libegl1`, `libgles2`). Optional web layer (`WEB=1`): WPE WebKit 2.54 with bubblewrap. Optional AirPlay runtime
+(`AIRPLAY=1`): GStreamer base/good/libav plugins and two of the bad ones, libplist, avahi's dns_sd library. Journal on
+disk (50 MB, kept across reboots). About 470 MB used on root without the optional layers, ~1.7 GB of RAM free.
 
 - **Users**: root only (ssh with keys only; optional password for the login on the screen). Applications create
   their own users.
@@ -39,6 +40,9 @@ OpenGL ES, no LLVM), the package `mesa-freedreno` in `/usr/lib/aarch64-linux-gnu
 - **mDNS**: `avahi-daemon` answers for `<hostname>.local` and lets applications announce services (AirPlay, …).
 - **Firmware**: `msm-firmware-loader` (copied from postmarketOS 1.5.0, MIT) runs before udev, mounts `modem` and
   `persist` read-only and points the kernel firmware path at their blobs (audio DSP, Wi-Fi, venus).
+- **Video decoder**: with `venus-core.ko` in the parts, the kernel package's `venus-core` is replaced by the rebuilt
+  one ([driver/venus](../driver/venus/README.md)); udev loads it and `/dev/video*` appear (`qcom-venus-decoder`,
+  `qcom-venus-encoder`).
 - **Audio**: `thinksmart-audio.service` waits for the `cd18781y` card (udev loads `snd-soc-tas5782m`), applies the
   UCM boot sequence and `HiFi`/`Speaker`/`Microphone`, sets the volume on the amplifier (`Speaker Amp Master`)
   from `/var/lib/thinksmart/volume` or `VOLUME` of `/etc/default/thinksmart-audio`, and leaves the software volume
