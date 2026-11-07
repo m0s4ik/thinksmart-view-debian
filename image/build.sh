@@ -15,6 +15,7 @@
 #                      snd-soc-tas5782m.ko
 #                      mesa-freedreno_<ver>_arm64.deb (image/build-mesa.sh)
 #                      vcnl4000.ko (optional, light sensor: driver/vcnl4000)
+#                      venus-core.ko (optional, video decoder: driver/venus)
 #                      libwpewebkit-2.0-1_<ver>_arm64.deb (only with WEB=1: image/build-wpe.sh)
 #          image/rootfs/ of this repository, and optionally the CUSTOMIZE script
 # Output:  $WORK_DIR/out/thinksmart-debian-YYYYMMDD.img (sparse) + .img.gz + .sha256
@@ -296,6 +297,12 @@ if [ -s "$P/vcnl4000.ko" ]; then
     install -m 0644 "$P/vcnl4000.ko" "$R/usr/lib/modules/$KVER/extra/vcnl4000.ko"
 else
     echo "NOTE: no $P/vcnl4000.ko: image without the light sensor (see driver/vcnl4000/README.md)"
+fi
+# video decoder (optional, driver/venus): the venus-core of the kernel package fails to start (-5) with our firmware
+if [ -s "$P/venus-core.ko" ]; then
+    install -m 0644 "$P/venus-core.ko" "$R/usr/lib/modules/$KVER/kernel/drivers/media/platform/qcom/venus/venus-core.ko"
+else
+    echo "NOTE: no $P/venus-core.ko: image without the hardware video decoder (see driver/venus/README.md)"
 fi
 in_chroot ldconfig
 in_chroot depmod -a "$KVER"

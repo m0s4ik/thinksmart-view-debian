@@ -38,6 +38,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `image/rootfs/` | files copied into the image |
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
+| `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
 
 ## Commands and the checks that must pass
 
@@ -46,6 +47,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
                                                  # firmware.tar, ucm.tar
 # build snd-soc-tas5782m.ko: driver/tas5782m/README.md, then copy it to image/parts/
 # optional: vcnl4000.ko (light sensor) from driver/vcnl4000/README.md, also to image/parts/
+# optional: venus-core.ko (video decoder) from driver/venus/README.md, also to image/parts/
 ./image/build-mesa.sh                            # reduced Mesa for the GPU -> image/parts/mesa-freedreno_*_arm64.deb
 /sbin/modinfo image/parts/snd-soc-tas5782m.ko    # vermagic "7.1.3-msm8953 SMP preempt mod_unload aarch64"
                                                  # and parm volume_mode + standby_ms

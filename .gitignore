@@ -13,6 +13,9 @@ dist/
 .private-patterns
 # upstream source copied at build time (driver/vcnl4000/README.md)
 driver/vcnl4000/vcnl4000.c
+driver/venus/*.c
+driver/venus/*.h
+driver/venus/*.orig
 # kernel module build output
 driver/*/*.o
 driver/*/*.mod

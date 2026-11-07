@@ -27,7 +27,7 @@
   `etc/deviceinfo` containing `deviceinfo_no_framebuffer="true"` (the kernel reads concatenated archives in order).
   Untested; a broken initramfs needs EDL to recover.
 - lk2nd supports a **single entry** in `extlinux.conf`.
-- Harmless messages: `Failed to set OPP config` on cpu0, `psci: failed to set PC mode`, `venus` -5.
+- Harmless messages: `Failed to set OPP config` on cpu0, `psci: failed to set PC mode`.
 - **Suspend works** (`systemctl suspend`, s2idle, the only mode the kernel offers): screen off, under 0.5 W at the
   wall (a smart plug with 1 W resolution reads 0 W, against ~1 W idle with the screen on), Wi-Fi off. **Vol+ and Vol−
   wake it** within a second or two, and so does an RTC alarm (`rtcwake -m freeze -s <seconds>`); Wi-Fi reconnects by
@@ -65,7 +65,9 @@
   uses our 2.54 backport (`image/build-wpe.sh`).
 - **WebKit's sandbox does not see `/opt`**: Mesa and anything the web process loads must live under `/usr`; that is
   why the image installs Mesa as a package in `/usr/lib/aarch64-linux-gnu` since v0.3.
-- The video decoder `venus` fails to start on 7.1.3 (-5): video is decoded in software.
+- The video decoder `venus` of the 7.1.3 kernel package fails to start (-5, `Unsupported property: 0`): the image
+  replaces `venus-core` with the module of [driver/venus](../driver/venus/README.md) (optional part). With it, a stream
+  with B-frames decodes but the drain at end of file hangs: give file playback a timeout.
 - Landscape orientations from the accelerometer are derived from its axes ([hardware.md](hardware.md)), not verified.
 
 ## Sensors

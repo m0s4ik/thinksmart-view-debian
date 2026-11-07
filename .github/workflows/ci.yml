@@ -92,6 +92,18 @@ jobs:
           name: vcnl4000-${{ env.KVER }}
           path: driver/vcnl4000/vcnl4000.ko
           if-no-files-found: error
+      - name: Build the video decoder module (venus-core with driver/venus/hfi_parser.patch)
+        run: |
+          cp /tmp/kernel/drivers/media/platform/qcom/venus/*.[ch] driver/venus/
+          patch -d driver/venus -p1 < driver/venus/hfi_parser.patch
+          $KMAKE -C /tmp/kernel -j"$(nproc)" KBUILD_MODPOST_WARN=1 M="$PWD/driver/venus" modules
+          /sbin/modinfo -F vermagic driver/venus/venus-core.ko | grep -q "^$KVER SMP preempt mod_unload aarch64"
+          /sbin/modinfo -F alias driver/venus/venus-core.ko | grep -q 'msm8953-venus'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: venus-core-${{ env.KVER }}
+          path: driver/venus/venus-core.ko
+          if-no-files-found: error
       - name: Build the poweroff module (experimental, driver/thinksmart-poweroff)
         run: |
           $KMAKE -C /tmp/kernel -j"$(nproc)" KBUILD_MODPOST_WARN=1 M="$PWD/driver/thinksmart-poweroff" modules
