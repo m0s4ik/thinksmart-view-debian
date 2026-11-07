@@ -17,8 +17,10 @@
 #                      vcnl4000.ko (optional, light sensor: driver/vcnl4000)
 #                      venus-core.ko (optional, video decoder: driver/venus)
 #                      libwpewebkit-2.0-1_<ver>_arm64.deb (only with WEB=1: image/build-wpe.sh)
+#          AIRPLAY=1 needs nothing in PARTS_DIR (Debian packages only; venus-core.ko for screen mirroring)
 #          image/rootfs/ of this repository, and optionally the CUSTOMIZE script
 # Output:  $WORK_DIR/out/thinksmart-debian-YYYYMMDD.img (sparse) + .img.gz + .sha256
+#          (AIRPLAY=1: also gstreamer1.0-plugins-bad-airplay_<ver>_arm64.deb, see image/README.md)
 #
 # Image = the whole "system" partition after apply-ubuntu-gpt.sh ($SYSTEM_SECTORS sectors) with an MBR inside:
 #   p1 2048 + 497664 sectors, ext2 (minimal features like postmarketOS: lk2nd reads it), /boot with extlinux;
@@ -43,6 +45,7 @@ LAN_TCP_PORTS=${LAN_TCP_PORTS:-22}
 SYSTEM_SECTORS=${SYSTEM_SECTORS:-14280671}
 CUSTOMIZE=${CUSTOMIZE:-}
 WEB=${WEB:-0}
+AIRPLAY=${AIRPLAY:-0}
 DEBIAN_MIRROR=${DEBIAN_MIRROR:-http://deb.debian.org/debian}
 cd "$REPO"
 P=$(cd "${PARTS_DIR:-image/parts}" && pwd)
@@ -64,6 +67,15 @@ PACKAGES="systemd systemd-sysv systemd-timesyncd udev kmod dbus
   alsa-utils alsa-ucm-conf python3 python3-venv python3-pip
   iproute2 iputils-ping iw curl ca-certificates less vim-tiny procps tzdata locales e2fsprogs
   fonts-dejavu-core dmsetup"
+# AIRPLAY=1: what an AirPlay receiver built on UxPlay needs at run time (the receiver itself comes with the
+# application): GStreamer with its base (appsrc, audioconvert), good (v4l2 decoders on venus, capssetter) and libav
+# (AAC, ALAC) plugins, libplist and avahi's dns_sd compatibility library. Of the bad plugins it needs only h264parse
+# and unixfdsink, but Debian's gstreamer1.0-plugins-bad is one package that pulls ~80 more packages and ~210 MB (GTK,
+# onnxruntime, oneDNN, ...): AIRPLAY_BAD_PLUGINS are taken from it into a small local package instead (see below).
+# No GStreamer GL, ALSA plugin, encoder or tools.
+AIRPLAY_PACKAGES="gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav libgstreamer-plugins-bad1.0-0
+  libplist-2.0-4 libavahi-compat-libdnssd1"
+AIRPLAY_BAD_PLUGINS="libgstvideoparsersbad.so libgstunixfd.so"
 # dmsetup: udev rules of device-mapper (55-dm.rules, 60-persistent-storage-dm.rules). /boot and the root file system
 # are device-mapper devices (kpartx in the initramfs): without them, no /dev/disk/by-uuid for /boot and emergency mode
 # at boot. The postmarketOS initramfs also needs rootfs/etc/udev/rules.d/54-dm-initramfs.rules (docs/boot.md).
@@ -118,6 +130,11 @@ case "$WEB" in
     1)  WPE_DEB=$(find "$P" -maxdepth 1 -name "libwpewebkit-2.0-1_*_arm64.deb" | sort -V | tail -n1)
         [ -n "$WPE_DEB" ] || { echo "WEB=1 but no $P/libwpewebkit-2.0-1_*_arm64.deb: build it with image/build-wpe.sh" >&2; exit 1; } ;;
     *)  echo "WEB must be 0 or 1" >&2; exit 1 ;;
+esac
+case "$AIRPLAY" in
+    0|"") AIRPLAY=0 ;;
+    1)  ;;
+    *)  echo "AIRPLAY must be 0 or 1" >&2; exit 1 ;;
 esac
 for f in boot.tar modules-$KVER.tar firmware.tar ucm.tar snd-soc-tas5782m.ko; do
     [ -s "$P/$f" ] || { echo "missing $P/$f (see docs/kernel.md)" >&2; exit 1; }
@@ -190,6 +207,44 @@ if [ "$WEB" = 1 ]; then
     step "web layer: $(basename "$WPE_DEB")"
     cp "$WPE_DEB" "$R/tmp/"
     in_chroot apt-get install -y -q --no-install-recommends "/tmp/$(basename "$WPE_DEB")"
+fi
+if [ "$AIRPLAY" = 1 ]; then
+    step "AirPlay runtime (GStreamer for UxPlay)"
+    # shellcheck disable=SC2086
+    in_chroot apt-get install -y -q --no-install-recommends $AIRPLAY_PACKAGES
+    # gstreamer1.0-plugins-bad-airplay: AIRPLAY_BAD_PLUGINS, unchanged, out of Debian's gstreamer1.0-plugins-bad of the
+    # same version as the installed libgstreamer-plugins-bad1.0-0. It conflicts with the full package, so
+    # `apt install gstreamer1.0-plugins-bad` on the device replaces it. The parsing code itself is in
+    # libgstreamer-plugins-bad1.0-0 (libgstcodecparsers), which apt keeps upgrading; a rebuild refreshes the plugins.
+    badver=$(in_chroot dpkg-query -W -f='${Version}' libgstreamer-plugins-bad1.0-0)
+    upver=${badver%%-*}
+    in_chroot sh -c "cd /tmp && apt-get download -q gstreamer1.0-plugins-bad=$badver"
+    BP=$R/tmp/pkg; GD=usr/lib/aarch64-linux-gnu/gstreamer-1.0; DOC=usr/share/doc/gstreamer1.0-plugins-bad-airplay
+    rm -rf "$R/tmp/bad" "$BP"; mkdir -p "$BP/DEBIAN" "$BP/$GD" "$BP/$DOC"
+    dpkg-deb -x "$R"/tmp/gstreamer1.0-plugins-bad_*_arm64.deb "$R/tmp/bad"
+    for f in $AIRPLAY_BAD_PLUGINS; do install -m 0644 "$R/tmp/bad/$GD/$f" "$BP/$GD/"; done
+    install -m 0644 "$R/tmp/bad/usr/share/doc/gstreamer1.0-plugins-bad/copyright" "$BP/$DOC/"
+    {
+        echo "Package: gstreamer1.0-plugins-bad-airplay"
+        echo "Version: $badver+thinksmart1"
+        echo "Architecture: arm64"
+        echo "Maintainer: thinksmart-view-debian image/build.sh <root@localhost>"
+        echo "Depends: libgstreamer-plugins-bad1.0-0 (>= $upver), libgstreamer-plugins-bad1.0-0 (<< ${upver%.*}.99), libgstreamer1.0-0, libgstreamer-plugins-base1.0-0, libglib2.0-0t64"
+        echo "Conflicts: gstreamer1.0-plugins-bad"
+        echo "Replaces: gstreamer1.0-plugins-bad"
+        echo "Section: libs"
+        echo "Priority: optional"
+        echo "Description: h264parse and unixfdsink from gstreamer1.0-plugins-bad $badver"
+        echo " $AIRPLAY_BAD_PLUGINS, unchanged, from Debian's gstreamer1.0-plugins-bad,"
+        echo " without its other plugins and their dependencies. Built by image/build.sh of"
+        echo " thinksmart-view-debian for the AirPlay runtime (AIRPLAY=1)."
+    } > "$BP/DEBIAN/control"
+    in_chroot dpkg-deb --root-owner-group -b /tmp/pkg /tmp/gstreamer1.0-plugins-bad-airplay.deb
+    in_chroot apt-get install -y -q --no-install-recommends /tmp/gstreamer1.0-plugins-bad-airplay.deb
+    # kept next to the image, for devices that get the AirPlay runtime without reflashing (image/README.md)
+    rm -f "$OUT"/gstreamer1.0-plugins-bad-airplay_*_arm64.deb
+    cp "$R/tmp/gstreamer1.0-plugins-bad-airplay.deb" "$OUT/gstreamer1.0-plugins-bad-airplay_${badver}+thinksmart1_arm64.deb"
+    rm -rf "$R/tmp/bad" "$BP" "$R"/tmp/gstreamer1.0-plugins-bad*.deb
 fi
 rm -f "$R"/tmp/*.deb
 in_chroot apt-get -y -q dist-upgrade
@@ -303,6 +358,7 @@ if [ -s "$P/venus-core.ko" ]; then
     install -m 0644 "$P/venus-core.ko" "$R/usr/lib/modules/$KVER/kernel/drivers/media/platform/qcom/venus/venus-core.ko"
 else
     echo "NOTE: no $P/venus-core.ko: image without the hardware video decoder (see driver/venus/README.md)"
+    [ "$AIRPLAY" = 0 ] || echo "NOTE: AIRPLAY=1 without venus-core.ko: screen mirroring has no hardware H.264 decoder"
 fi
 in_chroot ldconfig
 in_chroot depmod -a "$KVER"
@@ -347,6 +403,7 @@ Debian: $(cat "$R/etc/debian_version") arm64 (systemd $(in_chroot dpkg-query -W 
 kernel: $KVER (postmarketOS linux-postmarketos-qcom-msm8953, frozen), postmarketOS initramfs
 Mesa: $(in_chroot dpkg-query -W -f='${Version}' mesa-freedreno) (mesa-freedreno, freedreno only, libglvnd vendor)
 web layer: $([ "$WEB" = 1 ] && in_chroot dpkg-query -W -f='WPE WebKit ${Version}' libwpewebkit-2.0-1 || echo off)
+AirPlay runtime: $([ "$AIRPLAY" = 1 ] && in_chroot dpkg-query -W -f='GStreamer ${Version}' libgstreamer1.0-0 || echo off)
 ${EXTRA:-customization: none}
 UUID: boot $BOOT_UUID  root $ROOT_UUID
 EOF

@@ -15,8 +15,9 @@ built into the image with a [customization script](#customization) or installed 
   `firmware.tar`, `ucm.tar` (with `fetch-parts.sh` from a device running postmarketOS 7.1.3),
   `snd-soc-tas5782m.ko` ([driver/tas5782m](../driver/tas5782m/README.md)) and
   `mesa-freedreno_<version>_arm64.deb` (with `build-mesa.sh`, dependencies at the top of the script).
-  Optional: `vcnl4000.ko` ([driver/vcnl4000](../driver/vcnl4000/README.md)); for the web layer,
-  `libwpewebkit-2.0-1_<version>_arm64.deb` (with `build-wpe.sh`).
+  Optional: `vcnl4000.ko` ([driver/vcnl4000](../driver/vcnl4000/README.md)), `venus-core.ko`
+  ([driver/venus](../driver/venus/README.md)); for the web layer, `libwpewebkit-2.0-1_<version>_arm64.deb` (with
+  `build-wpe.sh`).
 
 ## Build
 
@@ -48,11 +49,13 @@ host keys, so your ssh client does not complain after a reflash) as long as you 
 
 Debian `minbase` with systemd, NetworkManager, OpenSSH, nftables, ALSA (with the ThinkSmart UCM profile), Python 3
 with venv, DejaVu fonts, a reduced Mesa for the GPU (package `mesa-freedreno`, Mesa 26.3.0-rc3 behind Debian's
-libglvnd, no LLVM: [docs/kernel.md](../docs/kernel.md#mesa)); the kernel, modules (including `snd-soc-tas5782m`),
-firmware and `msm-firmware-loader`. Details in [docs/boot.md](../docs/boot.md).
+libglvnd, no LLVM: [docs/kernel.md](../docs/kernel.md#mesa)); the kernel, modules (including `snd-soc-tas5782m` and,
+when they are in the parts, `vcnl4000` and the rebuilt `venus-core`), firmware and `msm-firmware-loader`. Details in
+[docs/boot.md](../docs/boot.md).
 
 - **Audio**: `thinksmart-audio.service` sets up the card at boot. `default` plays on the speaker (volume on the
-  amplifier: `amixer -c 0 sset 'Speaker Amp Master' 70`, 0-85) and records from the two microphones; `aplay`/`arecord` work without options.
+  amplifier: `amixer -c 0 sset 'Speaker Amp Master' 70`, 0-85) and records from the two microphones; `aplay`/`arecord`
+  work without options. Playback is converted to 16 bit (24-bit playback is silent on this card).
 - **Network**: one Wi-Fi profile from `config.env`; firewall open only to `LAN_TCP_PORTS` (default 22) and mDNS from
   your LAN, plus what applications add in `/etc/nftables.d/`; `<hostname>.local` through avahi.
 - **Access**: `ssh root@<device>` with your key; optional root password for a login on the screen with a USB keyboard.
@@ -65,7 +68,8 @@ libsoup with `glib-networking`, libglvnd's `libgl1`. It is for an application th
 dashboard, for example) through its own small WPE program; no browser, compositor or session is installed. With
 `WEB=0` (the default) none of it is in the image.
 
-Measured on test builds of v0.3-rc1 (same configuration, `du` of the root file system as `verify.sh` prints it):
+Measured on test builds of v0.3-rc1 (same configuration, `du` of the root file system as `verify.sh` prints it;
+v0.3-rc3 figures in the table of the next section):
 
 | | packages | root file system | `.img.gz` |
 |---|---|---|---|
@@ -78,6 +82,42 @@ device (not yet measured on this image).
 
 The application should run the web engine with `FD_MESA_DEBUG=sysmem` in its own environment (its systemd unit), not
 system-wide: see [known-issues.md](../docs/known-issues.md#gpu-and-web-layer).
+
+## AirPlay runtime (optional)
+
+`AIRPLAY=1` in `config.env` installs what an AirPlay receiver built on [UxPlay](https://github.com/FDH2/UxPlay) needs
+at run time, all Debian binaries: GStreamer with `gstreamer1.0-plugins-base` (`appsrc`,
+audio conversion), `-good` (the V4L2 decoders on the Venus hardware decoder, `capssetter`) and `-libav` (AAC and ALAC
+audio), `h264parse` and `unixfdsink` from `-bad`, plus `libplist-2.0-4` and avahi's `libavahi-compat-libdnssd1`.
+
+Debian's `gstreamer1.0-plugins-bad` is a single package whose other plugins pull GTK 3, onnxruntime, oneDNN and ~80
+more packages (~210 MB). So `build.sh` installs only its library (`libgstreamer-plugins-bad1.0-0`, where the codec
+parsers live) and packs the two plugins it needs, unchanged, from Debian's `.deb` of the same version into a local
+package, `gstreamer1.0-plugins-bad-airplay`. It conflicts with the full package: `apt install
+gstreamer1.0-plugins-bad` on the device replaces it, if an application needs more.
+
+The receiver itself is not in the image: the application that uses it ships it (for example as its child process)
+together with its firewall rules in `/etc/nftables.d/`. mDNS (avahi, UDP 5353 from the LAN) is already open in every
+image, which is what the receiver needs to be found. No GStreamer GL, ALSA plugin, encoder or tools are installed.
+
+Screen mirroring decodes H.264 on the hardware: build with `venus-core.ko` in `PARTS_DIR`
+([driver/venus](../driver/venus/README.md)); see [known-issues.md](../docs/known-issues.md#video) for what the
+pipeline needs on this device. The speaker cannot be shared (no dmix), so the receiver's audio either owns the speaker
+or goes to the application that does.
+
+Measured on test builds of v0.3-rc3 (same configuration):
+
+| | packages | root file system | `.img.gz` |
+|---|---|---|---|
+| plain | 218 | 472 MB | 184 MB |
+| `AIRPLAY=1` | 405 | 741 MB | 292 MB |
+| `WEB=1 AIRPLAY=1` | 440 | 933 MB | 358 MB |
+
+`AIRPLAY=1` adds 187 packages and ~270 MB. Most of it is `gstreamer1.0-libav`: FFmpeg's `libavcodec` and the codec
+libraries Debian builds it with (~110 packages, ~170 MB, for the AAC and ALAC decoders); GStreamer's core and base
+plugins are ~50 MB, the good plugins ~45 MB, the bad plugins' library ~35 MB. With Debian's whole
+`gstreamer1.0-plugins-bad` it would be 486 packages and 958 MB. A GStreamer and FFmpeg built for these few elements
+would be far smaller: a possible later improvement.
 
 ## Customization
 
@@ -118,7 +158,9 @@ the PSK), `nft -c`; inside the image: Python with venv and the ALSA pcms `speake
 `mesa-freedreno` package, libglvnd's dispatchers and Mesa's vendor file, what the package provides, libgbm's backend
 path, no Debian Mesa or LLVM, `libEGL.so.1` loading Mesa through libglvnd (gbm and wayland platforms) and `ldd` of the
 GL libraries through qemu. Web layer: on (WPE ≥ 2.54, bubblewrap, user namespaces in the kernel, `ldd` of WebKit's
-processes) or off (no WebKit, bubblewrap or GStreamer).
+processes) or off (no WebKit or bubblewrap). AirPlay runtime: on (its packages, the GStreamer plugins UxPlay's
+pipelines use, `ldd` of libplist, `libdns_sd` and the plugins) or off (no GStreamer at all when the web layer is off
+too).
 
 ## After the first boot
 
@@ -130,3 +172,8 @@ processes) or off (no WebKit, bubblewrap or GStreamer).
   with no other change; stop them first, restart them after): copy the `.deb` over, then
   `apt install --no-install-recommends ./mesa-freedreno_*_arm64.deb && rm -rf /opt/mesa-freedreno
   /etc/ld.so.conf.d/mesa-freedreno.conf && ldconfig`.
+- From v0.3-rc2 to v0.3-rc3 without reflashing (done on a device): copy `rootfs/etc/asound.conf` to `/etc/asound.conf`
+  (16-bit playback; programs that play pick it up when they reopen the pcm), and install the rebuilt `venus-core.ko`
+  as in [driver/venus](../driver/venus/README.md#building). For the AirPlay runtime, `apt install
+  --no-install-recommends` the packages of `AIRPLAY_PACKAGES` in `build.sh`, then the
+  `gstreamer1.0-plugins-bad-airplay_*_arm64.deb` an `AIRPLAY=1` build leaves in `$WORK_DIR/out/`.

@@ -34,6 +34,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `image/fetch-parts.sh` | copies kernel parts from a device running postmarketOS 7.1.3 |
 | `image/build-mesa.sh` | reduced Mesa (freedreno, Wayland platform, libglvnd vendor) as the package `mesa-freedreno_*_arm64.deb` |
 | `image/build-wpe.sh` | WPE WebKit 2.54 backport for the optional web layer (`WEB=1`; Docker on a fast arm64 machine) |
+| `AIRPLAY=1` in `config.env` | optional GStreamer runtime for an AirPlay receiver built on UxPlay (Debian packages only) |
 | `image/config.env.example` | every setting, with comments; copy to `image/config.env` |
 | `image/rootfs/` | files copied into the image |
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
@@ -74,8 +75,10 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
 - `SYSTEM_SECTORS` must equal the `system` partition size after repartitioning, or the image does not fit / boot.
 - The USB-C port has no CC resistors: if EDL does not see the device, suggest a USB-A to USB-C cable.
 - Mesa lives in `/usr` as the package `mesa-freedreno`, which provides `libgbm1`, `libegl-mesa0` and `libglx-mesa0`:
-  never install Debian's Mesa (`libgl1-mesa-dri`, `mesa-libgallium`, `libgbm1`) next to it; apt refuses, do not force
-  it. `FD_MESA_DEBUG=sysmem` goes in the browser's environment only, never system-wide.
+  never install Debian's Mesa (`libgl1-mesa-dri`, `mesa-libgallium`, `libgbm1`). apt cannot put it next to
+  `mesa-freedreno`, so it offers to **remove** `mesa-freedreno` instead: read the list of removals before answering yes.
+  `-dev` packages (`libgbm-dev`, pulled by GStreamer's or WebKit's `-dev`) do this: build elsewhere.
+  `FD_MESA_DEBUG=sysmem` goes in the browser's environment only, never system-wide.
 - More in [docs/known-issues.md](docs/known-issues.md).
 
 ## Before committing

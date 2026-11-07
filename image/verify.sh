@@ -214,8 +214,31 @@ if grep -q '^web layer: WPE' "$V/etc/thinksmart-version"; then
     grep -q '^CONFIG_USER_NS=y' "$V/boot/config" && ok "kernel with user namespaces (WebKit's bubblewrap sandbox)" || no "kernel without CONFIG_USER_NS"
 else
     WEB=0
-    pkgs=$(dpkgq -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" {print $2}' | grep -E '^(libwpewebkit|bubblewrap$|libgstreamer)')
-    [ -z "$pkgs" ] && ok "web layer off: no WPE WebKit, bubblewrap or GStreamer" || no "web layer off but installed: $pkgs"
+    pkgs=$(dpkgq -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" {print $2}' | grep -E '^(libwpewebkit|bubblewrap$)')
+    [ -z "$pkgs" ] && ok "web layer off: no WPE WebKit or bubblewrap" || no "web layer off but installed: $pkgs"
+fi
+
+echo "-- AirPlay runtime"
+if grep -q '^AirPlay runtime: GStreamer' "$V/etc/thinksmart-version"; then
+    AIRPLAY=1
+    for p in gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav libgstreamer-plugins-bad1.0-0 \
+             gstreamer1.0-plugins-bad-airplay libplist-2.0-4 libavahi-compat-libdnssd1; do
+        if installed $p; then ok "$p $(dpkgq -W -f='${Version}' $p)"; else no "$p not installed"; fi
+    done
+    # the elements UxPlay's pipelines use: appsrc, h264parse, unixfdsink, v4l2h264dec (venus), capssetter,
+    # avdec_aac/avdec_alac, audioconvert, audioresample, fdsink
+    for f in libgstapp.so libgstvideoparsersbad.so libgstunixfd.so libgstvideo4linux2.so libgstdebug.so libgstlibav.so \
+             libgstaudioconvert.so libgstaudioresample.so libgstcoreelements.so; do
+        check "GStreamer plugin $f" test -e "$V/usr/lib/aarch64-linux-gnu/gstreamer-1.0/$f"
+    done
+    ! installed gstreamer1.0-plugins-bad && ok "not the whole gstreamer1.0-plugins-bad (GTK, onnxruntime, ...)" \
+        || no "gstreamer1.0-plugins-bad installed"
+else
+    AIRPLAY=0
+    if [ "$WEB" = 0 ]; then
+        pkgs=$(dpkgq -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" {print $2}' | grep -E '^libgstreamer')
+        [ -z "$pkgs" ] && ok "web layer and AirPlay runtime off: no GStreamer" || no "GStreamer installed: $pkgs"
+    fi
 fi
 
 echo "-- services"
@@ -296,6 +319,7 @@ fi
 echo "$out" | grep -q '^gbm ok$' && ok "GLESv2, GBM and its backend dri_gbm.so load" || no "GBM or GLESv2 do not load"
 libs="libEGL.so.1 libGLESv2.so.2 libEGL_mesa.so.0 libgbm.so.1 gbm/dri_gbm.so"
 [ "$WEB" = 1 ] && libs="$libs libWPEWebKit-2.0.so.1 wpe-webkit-2.0/WPEWebProcess wpe-webkit-2.0/WPENetworkProcess libgstgl-1.0.so.0"
+[ "$AIRPLAY" = 1 ] && libs="$libs libplist-2.0.so.4 libdns_sd.so.1 gstreamer-1.0/libgstvideo4linux2.so gstreamer-1.0/libgstvideoparsersbad.so gstreamer-1.0/libgstunixfd.so gstreamer-1.0/libgstlibav.so"
 for f in $libs; do
     nf=$(inside /usr/bin/ldd "/usr/lib/aarch64-linux-gnu/$f" 2>&1 | grep -E 'not found|No such file|not a dynamic')
     [ -z "$nf" ] && ok "ldd $f: every library found" || no "ldd $f: $nf"
