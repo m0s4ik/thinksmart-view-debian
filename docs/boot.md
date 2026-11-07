@@ -42,7 +42,7 @@ OpenGL ES, no LLVM), the package `mesa-freedreno` in `/usr/lib/aarch64-linux-gnu
 - **Audio**: `thinksmart-audio.service` waits for the `cd18781y` card (udev loads `snd-soc-tas5782m`), applies the
   UCM boot sequence and `HiFi`/`Speaker`/`Microphone`, sets the volume on the amplifier (`Speaker Amp Master`)
   from `/var/lib/thinksmart/volume` or `VOLUME` of `/etc/default/thinksmart-audio`, and leaves the software volume
-  (`/etc/asound.conf`, pcm `speaker`, control `Master`, also the `default` pcm) at 100%. `alsa-restore`/`alsa-state` are
+  (`/etc/asound.conf`, pcm `speaker`, control `Master`, also the `default` pcm; converted to 16 bit, see known-issues) at 100%. `alsa-restore`/`alsa-state` are
   masked.
 - **Services**: `msm-firmware-loader`, `thinksmart-audio`, NetworkManager, ssh, timesyncd, nftables, avahi-daemon; login on the screen
   (`getty@tty1`).

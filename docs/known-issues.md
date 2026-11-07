@@ -5,6 +5,11 @@
 - **dmix does not work** on this card: in mmap mode `hw_ptr` stays at 0 (q6asm) and `aplay` on dmix never finishes
   draining. So the speaker cannot be shared: one player at a time. Music/AirPlay alongside a voice assistant would need
   this fixed (or PipeWire, not tried).
+- **24-bit playback is silent**: the card offers S16_LE and S24_LE, but with S24_LE the speaker plays nothing (no error).
+  Anything decoded to 32 bit (GStreamer's `avdec_*`, ffmpeg) was converted to S24_LE by the plug and came out silent.
+  `/etc/asound.conf` now converts everything going through `speaker` (and `default`) to S16_LE (`speaker_hw`); programs
+  that open `hw:0,0` directly must use S16_LE. Where the 24-bit path breaks (q6asm, the DSP or the amplifier's 32-bit
+  I2S word) is not known yet.
 - **Amplifier power-up**: after a stream the amplifier is muted and goes to standby `standby_ms` later (default 3 s,
   see [driver/tas5782m/README.md](../driver/tas5782m/README.md)). The first sound after standby still needs ~0.5 s for
   the DSP firmware to load, which swallows short sounds: start them with ~600 ms of silence, raise `standby_ms`, or keep
