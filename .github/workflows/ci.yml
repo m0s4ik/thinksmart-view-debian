@@ -53,7 +53,7 @@ jobs:
           apt-get update -q
           DEBIAN_FRONTEND=noninteractive apt-get install -y -q --no-install-recommends \
             ca-certificates git clang-22 lld-22 llvm-22 make flex bison bc libssl-dev libelf-dev python3 cpio \
-            rsync kmod dwarves
+            rsync kmod dwarves patch
       - uses: actions/checkout@v7
       - name: Kernel source
         run: |
