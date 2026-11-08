@@ -149,6 +149,11 @@ This project stands on the work of others:
   images, the repartitioning script, and the research that made Linux on this device practical.
 - **[jethac/lenovo-thinksmart-view](https://github.com/jethac/lenovo-thinksmart-view)**: mainline work on the device,
   panel drivers and the camera (S5KC505A) analysis and driver.
+- **[Felix Kaechele (FelixKa)](https://github.com/kaechele)**: the device's support in the kernel this image runs
+  ([msm8953-mainline/linux](https://github.com/msm8953-mainline/linux)): the ThinkSmart View device tree, the
+  FocalTech FT8201 touchscreen (`edt-ft5x06`) and the QCA9379 SDIO Wi-Fi (`ath10k`); the device's postmarketOS port
+  and lk2nd builds ([his images](https://felix.kaechele.ca/projects/thinksmart/)), and the community work in the
+  [Home Assistant forum thread](https://community.home-assistant.io/t/lenovo-thinksmart-view-rom-os-development/676324).
 - **[msm8953-mainline](https://github.com/msm8953-mainline)**: the kernel.
 - **[postmarketOS](https://postmarketos.org)**: kernel package, initramfs, firmware packaging, msm-firmware-loader,
   UCM profiles.
