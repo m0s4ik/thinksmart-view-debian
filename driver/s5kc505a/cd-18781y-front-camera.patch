@@ -1,0 +1,165 @@
+--- a/arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts
++++ b/arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts
+@@ -135,6 +135,41 @@
+ 		vin-supply = <&vph_pwr>;
+ 	};
+ 
++	/*
++	 * Front camera rails, from the Lenovo DTB (camera@0): cam_vana is
++	 * pm8953_l17 at 2.85 V with GPIO 119 "CAM_VANA", cam_vdig is
++	 * pm8953_l2 at 1.2 V with GPIO 118 "CAM_VDIG". The GPIOs switch the
++	 * PMIC rails onto the module. A fixed regulator does not set the
++	 * voltage of its supply: pm8953_l2 is pinned at 1.2 V below.
++	 */
++	cam_vdda: cam-vdda-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "cam_vdda";
++		regulator-min-microvolt = <2850000>;
++		regulator-max-microvolt = <2850000>;
++
++		gpio = <&tlmm 119 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		vin-supply = <&pm8953_l17>;
++
++		pinctrl-0 = <&cam_vdda_en_default>;
++		pinctrl-names = "default";
++	};
++
++	cam_vddd: cam-vddd-regulator {
++		compatible = "regulator-fixed";
++		regulator-name = "cam_vddd";
++		regulator-min-microvolt = <1200000>;
++		regulator-max-microvolt = <1200000>;
++
++		gpio = <&tlmm 118 GPIO_ACTIVE_HIGH>;
++		enable-active-high;
++		vin-supply = <&pm8953_l2>;
++
++		pinctrl-0 = <&cam_vddd_en_default>;
++		pinctrl-names = "default";
++	};
++
+ 	/* Speaker amp supplied from 20V DC input */
+ 	speaker_amp_pvdd: speaker-amp-pvdd-regulator {
+ 		compatible = "regulator-fixed";
+@@ -175,6 +210,74 @@
+ 	};
+ };
+ 
++&camss {
++	/* Lenovo DTB: qcom,mipi-csi-vdd-supply = pm8953_s3 */
++	vdda-supply = <&pm8953_s3>;
++
++	status = "okay";
++
++	ports {
++		/*
++		 * Lenovo: CSIPHY 0 / CSID 0, two data lanes. The 3-phase
++		 * CSIPHY driver numbers data lanes 0-3 and uses lane 7 for the
++		 * clock (as msm8953-xiaomi-daisy).
++		 */
++		port@0 {
++			reg = <0>;
++
++			csiphy0_ep: endpoint {
++				clock-lanes = <7>;
++				data-lanes = <0 1>;
++				remote-endpoint = <&front_cam_ep>;
++			};
++		};
++	};
++};
++
++&cci {
++	status = "okay";
++};
++
++&cci_i2c0 {
++	/* 8-bit address 0x6e in the Lenovo sensor library */
++	camera@37 {
++		compatible = "samsung,s5kc505a";
++		reg = <0x37>;
++
++		clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
++		assigned-clocks = <&gcc GCC_CAMSS_MCLK0_CLK>;
++		assigned-clock-rates = <24000000>;
++
++		reset-gpios = <&tlmm 40 GPIO_ACTIVE_LOW>;
++		powerdown-gpios = <&tlmm 39 GPIO_ACTIVE_LOW>;
++
++		pinctrl-0 = <&camss_mclk0_default &cam_front_default>;
++		pinctrl-names = "default";
++
++		/* Lenovo DTB camera@0: 2.85 V, 1.2 V, 1.8 V */
++		vdda-supply = <&cam_vdda>;
++		vddd-supply = <&cam_vddd>;
++		vddio-supply = <&pm8953_l6>;
++
++		orientation = <0>;	/* front */
++		/*
++		 * The read-out is upright with the device on its stand
++		 * (landscape). Lenovo's qcom,mount-angle 270 is relative to the
++		 * panel's native portrait orientation, not to the scene as in
++		 * video-interface-devices.yaml.
++		 */
++		rotation = <0>;
++
++		port {
++			front_cam_ep: endpoint {
++				data-lanes = <1 2>;
++				link-frequencies = /bits/ 64 <480000000>;
++				remote-endpoint = <&csiphy0_ep>;
++			};
++		};
++	};
++};
++
+ &gpu_zap_shader {
+ 	firmware-name = "qcom/msm8953/lenovo/cd-18781y/a506_zap.mdt";
+ };
+@@ -456,9 +559,14 @@
+ 			regulator-max-microvolt = <1100000>;
+ 		};
+ 
++		/*
++		 * Lenovo range 0.975-1.225 V; its camera driver sets exactly
++		 * 1.2 V (cam_vdig), and the camera is the only consumer in the
++		 * Lenovo DTB. Pinned at the camera voltage.
++		 */
+ 		pm8953_l2: l2 {
+-			regulator-min-microvolt = <975000>;
+-			regulator-max-microvolt = <1225000>;
++			regulator-min-microvolt = <1200000>;
++			regulator-max-microvolt = <1200000>;
+ 			regulator-always-on;
+ 		};
+ 
+@@ -582,6 +690,28 @@
+ };
+ 
+ &tlmm {
++	/* Lenovo cam_sensor_rear_default: standby (GPIO 39) and reset (GPIO 40) */
++	cam_front_default: cam-front-default-state {
++		pins = "gpio39", "gpio40";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam_vdda_en_default: cam-vdda-en-default-state {
++		pins = "gpio119";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
++	cam_vddd_en_default: cam-vddd-en-default-state {
++		pins = "gpio118";
++		function = "gpio";
++		drive-strength = <2>;
++		bias-disable;
++	};
++
+ 	accel_int_default: accel-int-default-state {
+ 		pins = "gpio42";
+ 		function = "gpio";
