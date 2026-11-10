@@ -5,7 +5,8 @@ in `extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`), udev lo
 `qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene captured through CAMSS with
 `v4l2-ctl`, no errors in the kernel log. Boot time unchanged (24.2 s); one isolated slow boot is still unexplained
 ([known-issues.md](../../docs/known-issues.md#camera)). libcamera has not been tried. The camera needs a patched DTB,
-so it is optional and not in the image.
+so it is optional: `CAMERA=1` in `image/config.env` builds it into the image ([image/README.md](../../image/README.md#front-camera-optional);
+not flashed on a device yet), or install it by hand as below.
 
 The ThinkSmart View's front camera is a Samsung **S5KC505A** (5 Mpixel, RAW10 GRBG, 2 CSI-2 lanes at 480 MHz, 24 MHz
 MCLK) on the camera I²C controller (CCI) of the SoC. Two pieces are needed on top of the frozen 7.1.3 kernel:
@@ -15,6 +16,7 @@ MCLK) on the camera I²C controller (CCI) of the SoC. Two pieces are needed on t
 | `s5kc505a.c`, `Makefile` | the sensor driver, built out of tree into `s5kc505a.ko` |
 | `cd-18781y-front-camera.patch` | patch for `arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts` of msm8953-mainline `v7.1.3-r0`: enables `camss` and `cci`, adds the camera rails and the sensor node |
 | `samsung,s5kc505a.yaml` | the device tree binding (only for `dtbs_check`) |
+| `dtb.sha256` | sha256 of the kernel package's DTB (rebuilt from the unpatched source) and of the camera DTB: CI checks both builds against it, `image/build.sh` and `verify.sh` the files they install |
 | `make-test-bootimg.sh` | builds an Android boot image for a one-off `fastboot boot` from lk2nd with a different DTB, to try the device tree without writing to the device |
 | `raw10-to-png.py` | turns one raw frame into a PNG (standard library only, runs on the device) |
 
@@ -75,6 +77,11 @@ make -C /tmp/linux-7.1.3 ARCH=arm64 LLVM=1 LLVM_SUFFIX=-22 qcom/apq8053-lenovo-c
 cp /tmp/linux-7.1.3/arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dtb apq8053-lenovo-cd-18781y-camera.dtb
 ```
 
+`cd` to a directory with both DTBs under those names and `sha256sum -c driver/s5kc505a/dtb.sha256` must say OK twice.
+CI does all of this on every push and keeps `s5kc505a.ko` and the camera DTB as artifacts (`s5kc505a-7.1.3-msm8953`,
+`cd-18781y-camera-dtb`); copy both to `image/parts/` for `CAMERA=1`. A change to the patch changes the camera DTB's
+sum: update `dtb.sha256` in the same commit.
+
 Every symbol the module needs is exported by the 7.1.3 kernel, the media modules already loaded for the video
 decoder (`videodev`, `mc`) or `v4l2-cci`, `v4l2-fwnode`, `v4l2-async` of the kernel package.
 
@@ -97,9 +104,10 @@ should show `s5kc505a ...-0037: chip id 0x5034`.
 
 ## Installing
 
-lk2nd reads one entry of `extlinux.conf`. With `fdtdir /` it loads `/apq8053-lenovo-cd-18781y.dtb` (it tries
-`/qcom/…` and `/qcom-…` first, which do not exist on the boot partition); `fdtdir` wins over `fdt` when both are
-present. To keep the old DTB untouched:
+`CAMERA=1` (above) does these steps in the image. On a running system, by hand: lk2nd reads one entry of
+`extlinux.conf`. With `fdtdir /` it loads `/apq8053-lenovo-cd-18781y.dtb` (it tries `/qcom/…` and `/qcom-…` first,
+which do not exist on the boot partition); `fdtdir` wins over `fdt` when both are present. To keep the old DTB
+untouched:
 
 ```sh
 cp -a /boot/extlinux/extlinux.conf /boot/extlinux/extlinux.conf.nocamera

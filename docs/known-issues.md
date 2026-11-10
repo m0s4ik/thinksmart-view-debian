@@ -116,6 +116,6 @@
 
 - Faster boot (initramfs framebuffer wait).
 - Camera in the image: raw frames work with a patched DTB and an extra module, installed by hand
-  ([driver/s5kc505a](../driver/s5kc505a/README.md)); libcamera not tried, no tuning. RPM reports the sensor's VDIG rail
+  ([driver/s5kc505a](../driver/s5kc505a/README.md)); a `CAMERA=1` image has not been flashed yet; libcamera not tried, no tuning. RPM reports the sensor's VDIG rail
   (L2) at 1.200 V, the PMIC register at 1.175 V: not explained yet.
 - A newer kernel (the image is frozen on 7.1.3).

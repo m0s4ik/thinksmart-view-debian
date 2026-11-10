@@ -17,7 +17,8 @@ built into the image with a [customization script](#customization) or installed 
   `mesa-freedreno_<version>_arm64.deb` (with `build-mesa.sh`, dependencies at the top of the script).
   Optional: `vcnl4000.ko` ([driver/vcnl4000](../driver/vcnl4000/README.md)), `venus-core.ko`
   ([driver/venus](../driver/venus/README.md)); for the web layer, `libwpewebkit-2.0-1_<version>_arm64.deb` (with
-  `build-wpe.sh`).
+  `build-wpe.sh`); for the front camera, `s5kc505a.ko` and `apq8053-lenovo-cd-18781y-camera.dtb`
+  ([driver/s5kc505a](../driver/s5kc505a/README.md), both built by CI).
 
 ## Build
 
@@ -119,6 +120,18 @@ plugins are ~50 MB, the good plugins ~45 MB, the bad plugins' library ~35 MB. Wi
 `gstreamer1.0-plugins-bad` it would be 486 packages and 958 MB. A GStreamer and FFmpeg built for these few elements
 would be far smaller: a possible later improvement.
 
+## Front camera (optional)
+
+`CAMERA=1` in `config.env` installs the S5KC505A sensor driver (`s5kc505a.ko` in `extra/`) and `v4l-utils`, and puts
+the camera DTB (`apq8053-lenovo-cd-18781y-camera.dtb`) in `/boot` **next to** the kernel package's DTB, which stays
+as it is. lk2nd reads one entry and `fdtdir` wins over `fdt`, so `extlinux.conf` gets
+`fdt /apq8053-lenovo-cd-18781y-camera.dtb` **instead of** `fdtdir /`; `/boot/extlinux/extlinux.conf.nocamera` is the
+same file with `fdtdir /`, to go back (`cp` it over `extlinux.conf` and reboot). `build.sh` accepts only the camera
+DTB whose sha256 is in `driver/s5kc505a/dtb.sha256`, on top of a `boot.tar` whose DTB is the one it was patched from:
+the DTB is what lk2nd boots, and a DTB that does not boot needs someone at the device
+([driver/s5kc505a](../driver/s5kc505a/README.md#installing)). With `CAMERA=0` the image is the same as without the
+option.
+
 ## Customization
 
 Set `CUSTOMIZE=/path/to/script.sh` in `config.env` to add an application to the image. The script is **sourced** by
@@ -160,7 +173,10 @@ path, no Debian Mesa or LLVM, `libEGL.so.1` loading Mesa through libglvnd (gbm a
 GL libraries through qemu. Web layer: on (WPE ≥ 2.54, bubblewrap, user namespaces in the kernel, `ldd` of WebKit's
 processes) or off (no WebKit or bubblewrap). AirPlay runtime: on (its packages, the GStreamer plugins UxPlay's
 pipelines use, `ldd` of libplist, `libdns_sd` and the plugins) or off (no GStreamer at all when the web layer is off
-too).
+too). Front camera (found from `extlinux.conf`, the module or the camera DTB): no `fdtdir`, exactly one `fdt` naming
+the camera DTB, that file in `/boot`, the original DTB still there, both DTBs as pinned in
+`driver/s5kc505a/dtb.sha256`, `extlinux.conf.nocamera`, the module's vermagic, `modules.dep` and `modules.alias`,
+`v4l-utils`; without it, `fdtdir /`.
 
 ## After the first boot
 

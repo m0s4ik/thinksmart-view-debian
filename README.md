@@ -63,7 +63,7 @@ optional layers off.</sub>
 | 🚀 **Headless boot** | ready in ~25 s, survives without a keyboard (no emergency-mode dead ends) |
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
 
-Optional and installed by hand: the front camera (raw frames through V4L2 with a patched DTB and an extra module,
+Optional: the front camera (raw frames through V4L2 with a patched DTB and an extra module, `CAMERA=1` or by hand,
 [driver/s5kc505a](driver/s5kc505a/README.md)). `poweroff` does not stay off with the power supply plugged in (use suspend,
 or `systemctl halt` before unplugging). See [known issues](docs/known-issues.md).
 
@@ -137,7 +137,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] `poweroff` that stays off with the supply plugged in
 - [ ] Faster boot (initramfs framebuffer wait)
 - [x] Front camera (S5KC505A): raw frames, optional (patched DTB)
-- [ ] Camera in the image (`CAMERA=1`) and through libcamera
+- [ ] Camera in the image (`CAMERA=1`: built, not flashed on a device yet) and through libcamera
 - [ ] FT8201 panel variant
 
 ## Credits

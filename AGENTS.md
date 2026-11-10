@@ -40,7 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
-| `driver/s5kc505a/` | optional front camera: jethac's sensor driver (out of tree) + device tree patch; needs a rebuilt DTB and `fdt` in `extlinux.conf`, installed by hand (not by `build.sh`) |
+| `driver/s5kc505a/` | optional front camera: jethac's sensor driver (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`) and `fdt` in `extlinux.conf`: `CAMERA=1` in `config.env`, or by hand |
 
 ## Commands and the checks that must pass
 
@@ -50,6 +50,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 # build snd-soc-tas5782m.ko: driver/tas5782m/README.md, then copy it to image/parts/
 # optional: vcnl4000.ko (light sensor) from driver/vcnl4000/README.md, also to image/parts/
 # optional: venus-core.ko (video decoder) from driver/venus/README.md, also to image/parts/
+# optional, CAMERA=1: s5kc505a.ko + apq8053-lenovo-cd-18781y-camera.dtb (driver/s5kc505a/README.md or CI artifacts)
 ./image/build-mesa.sh                            # reduced Mesa for the GPU -> image/parts/mesa-freedreno_*_arm64.deb
 /sbin/modinfo image/parts/snd-soc-tas5782m.ko    # vermagic "7.1.3-msm8953 SMP preempt mod_unload aarch64"
                                                  # and parm volume_mode + standby_ms
@@ -81,8 +82,10 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   `-dev` packages (`libgbm-dev`, pulled by GStreamer's or WebKit's `-dev`) do this: build elsewhere.
   `FD_MESA_DEBUG=sysmem` goes in the browser's environment only, never system-wide.
 - The camera DTB ([driver/s5kc505a](driver/s5kc505a/README.md)) changes what lk2nd boots: keep the old DTB, keep a
-  copy of `extlinux.conf`, and ask before rebooting into it. `kernel.panic` is 0 and there is no watchdog, so a hang
-  needs someone at the device.
+  copy of `extlinux.conf`, and ask before rebooting into it (or flashing a `CAMERA=1` image). `kernel.panic` is 0 and
+  there is no watchdog, so a hang needs someone at the device. Never put `fdt` next to `fdtdir` (fdtdir wins) and never
+  name a DTB that is not in `/boot` (no boot); `build.sh` refuses a camera DTB other than the one in
+  `driver/s5kc505a/dtb.sha256`: rebuild it; the sum changes only together with the patch.
 - More in [docs/known-issues.md](docs/known-issues.md).
 
 ## Before committing

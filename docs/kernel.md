@@ -16,13 +16,15 @@ None of these binaries are in this repository. `image/build.sh` expects them in 
 | `snd-soc-tas5782m.ko` | the speaker driver built for this kernel ([driver/tas5782m/README.md](../driver/tas5782m/README.md)) |
 | `vcnl4000.ko` | optional: the light sensor driver built for this kernel ([driver/vcnl4000/README.md](../driver/vcnl4000/README.md)) |
 | `venus-core.ko` | optional: the video decoder core rebuilt with the mainline HFI parser ([driver/venus/README.md](../driver/venus/README.md)); replaces the kernel package's one |
+| `s5kc505a.ko`, `apq8053-lenovo-cd-18781y-camera.dtb` | optional, only for the front camera (`CAMERA=1`): the sensor driver and the patched DTB ([driver/s5kc505a/README.md](../driver/s5kc505a/README.md)); CI builds both |
 | `mesa-freedreno_<version>_arm64.deb` | reduced Mesa for the GPU (freedreno only, EGL, GBM, OpenGL ES, Wayland platform, no LLVM, ~22 MB installed), built by `image/build-mesa.sh` (see [Mesa](#mesa) below) |
 | `libwpewebkit-2.0-1_*~bpo13+1_arm64.deb` (+ `-dev`, `wpewebkit-webdriver`) | optional, only for the web layer (`WEB=1`): WPE WebKit 2.54 backported from Debian forky to Debian 13 (Debian 13's 2.48 cannot use the GPU with Mesa 26), built by `image/build-wpe.sh` on a fast arm64 machine with Docker. The image installs only `libwpewebkit-2.0-1` |
 
 The kernel package's DTB is used as it is. The DTS of msm8953-mainline `v7.1.3-r0` rebuilds it byte for byte
 (`make … qcom/apq8053-lenovo-cd-18781y.dtb` with the `.config` above), which is how the optional camera DTB is made:
-the same source with [driver/s5kc505a](../driver/s5kc505a/README.md)'s patch. `image/build.sh` does not install it
-(nor `s5kc505a.ko`) yet; see that README to install both by hand.
+the same source with [driver/s5kc505a](../driver/s5kc505a/README.md)'s patch. Both DTBs' sha256 are pinned in
+`driver/s5kc505a/dtb.sha256`: CI rebuilds and checks them, and `image/build.sh` with `CAMERA=1` installs the camera DTB
+next to the original (and `s5kc505a.ko`) only if they match.
 
 ## Getting them (what we did)
 

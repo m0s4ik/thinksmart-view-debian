@@ -39,7 +39,7 @@ memory) with `media-ctl`/`v4l2-ctl`, no errors in the kernel log. Everything is 
   GPIO 119, VDIG L2 **1.2 V** via GPIO 118, L2 pinned at 1.2 V), the sensor at 0x37 with MCLK0 24 MHz, reset GPIO 40,
   powerdown GPIO 39, VIO L6, `rotation = <0>`. Every value comes from the Lenovo DTB (table in the driver's README):
   a wrong VDIG can damage the sensor. The unpatched source rebuilds the device's DTB byte for byte, and the patch
-  changes nothing else. Because of this patched DTB the camera is **optional** and not in the image.
+  changes nothing else. Because of this patched DTB the camera is **optional**: `CAMERA=1` in the build config.
 - **Open**: RPM reports L2 at 1.200 V, the PMIC register at 1.175 V; libcamera (simple pipeline handler with the
   Software ISP, 0.7.1 in trixie-backports) not tried; no sensor tuning, so colours from a raw frame are only a quick
   grey-world guess. One slow boot (85 s) seen once after the first camera session, not reproduced
