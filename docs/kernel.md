@@ -50,9 +50,9 @@ postmarketOS mirror; only the initramfs is generated on the device by `mkinitfs`
 ## Mesa
 
 Debian's Mesa pulls LLVM (~450 MB on disk) and drivers for every GPU. `image/build-mesa.sh` builds **Mesa
-26.3.0-rc3** with only the freedreno Gallium driver, EGL, GBM and OpenGL ES, without LLVM, X11, Vulkan or video
-acceleration, and packs it as `mesa-freedreno_26.3.0~rc3-1_arm64.deb`. The tarball's sha256 is pinned in the script
-(checked against the release signature). v0.3 moves to 26.3.0 final.
+26.3.0** with only the freedreno Gallium driver, EGL, GBM and OpenGL ES, without LLVM, X11, Vulkan or video
+acceleration, and packs it as `mesa-freedreno_26.3.0-1_arm64.deb`. The tarball's sha256 is pinned in the script
+(checked against the release signature). The v0.3 release candidates shipped 26.3.0-rc3.
 
 - **Wayland platform, always on**: WPE WebKit 2.54 (web layer) creates its EGL displays and buffers through it, also
   when drawing off screen. Cost: `libwayland-client0`, ~90 KB.

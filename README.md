@@ -68,13 +68,10 @@ or `systemctl halt` before unplugging). See [known issues](docs/known-issues.md)
 
 ## What's new in v0.3
 
-> [!IMPORTANT]
-> **Release candidate.** The v0.3 release candidates ship **Mesa 26.3.0-rc3**, the version the web layer was tested
-> with on the device; v0.3 comes when Mesa 26.3.0 final is out.
-
-- **Mesa 26.3** as a Debian package (`mesa-freedreno`) in `/usr`, behind Debian's libglvnd, with the **Wayland
+- **Mesa 26.3.0** as a Debian package (`mesa-freedreno`) in `/usr`, behind Debian's libglvnd, with the **Wayland
   platform** (needed by WPE WebKit). It stands in for Debian's `libgbm1` and `libegl-mesa0`, so apt never pulls
-  Debian's Mesa and LLVM. Still no LLVM, X11, Vulkan or video ([docs/kernel.md](docs/kernel.md#mesa)). *(rc1)*
+  Debian's Mesa and LLVM. Still no LLVM, X11, Vulkan or video ([docs/kernel.md](docs/kernel.md#mesa)). *(rc1; the release
+  candidates shipped 26.3.0-rc3, v0.3 the final release)*
 - **Optional web layer** (`WEB=1`): WPE WebKit 2.54, backported to Debian 13 by `image/build-wpe.sh`, with bubblewrap
   for its sandbox ([image/README.md](image/README.md#web-layer-optional)). *(rc1)*
 - **Firewall rules of applications** in `/etc/nftables.d/*.nft`, and **mDNS** with avahi (`<hostname>.local`,
@@ -134,7 +131,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Mesa 26.3 in `/usr` with the Wayland platform; optional web layer (WPE WebKit 2.54)
 - [x] Suspend, woken by the volume keys
 - [x] Hardware video decoder (Venus); optional AirPlay runtime
-- [ ] Mesa 26.3.0 final (v0.3)
+- [x] Mesa 26.3.0 final (v0.3)
 - [ ] Fix for the freedreno GMEM loop, proposed upstream
 - [ ] `poweroff` that stays off with the supply plugged in
 - [ ] Faster boot (initramfs framebuffer wait)

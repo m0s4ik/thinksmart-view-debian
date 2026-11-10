@@ -56,14 +56,11 @@
 
 ## GPU and web layer
 
-- **Mesa is a release candidate**: the v0.3 release candidates ship **Mesa 26.3.0-rc3**, the version WPE WebKit 2.54
-  was tested with on the device (Mesa 26.3 final was not out yet). v0.3 moves to 26.3.0 final; rebuild with
-  `MESA_VERSION=26.3.0 MESA_SHA256=<sum> ./image/build-mesa.sh` when it is out.
 - **freedreno loops forever on some browser render targets** (Adreno 5xx, GMEM tiling): `layout_gmem()` /
   `calc_nbins()` in `src/gallium/drivers/freedreno/freedreno_gmem.c` keeps adding bins while a bin does not fit in
   the 136 KiB of GMEM, and when even the smallest aligned bin does not fit the loop never ends. The thread spins at
   100 %, the page hangs. Seen with WebKit's GPU 2D canvas, WebGL and, with WPE 2.54, some ordinary Home Assistant
-  dashboards; same in Mesa 25.0.7 and 26.3.0-rc3. Programs with simple surfaces (a Slint or femtovg UI, a compositor)
+  dashboards; same in Mesa 25.0.7, 26.3.0-rc3 and 26.3.0. Programs with simple surfaces (a Slint or femtovg UI, a compositor)
   do not hit it. **Workaround**: `FD_MESA_DEBUG=sysmem` (render straight to memory, no tiling) **in the browser's
   environment only**, e.g. `Environment=FD_MESA_DEBUG=sysmem` in the browser's systemd unit: then the canvas and
   WebGL work on the GPU. Do not set it system-wide (`/etc/environment`): every other GL program would lose tiling

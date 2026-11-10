@@ -48,7 +48,7 @@ host keys, so your ssh client does not complain after a reflash) as long as you 
 ## What is in the image
 
 Debian `minbase` with systemd, NetworkManager, OpenSSH, nftables, ALSA (with the ThinkSmart UCM profile), Python 3
-with venv, DejaVu fonts, a reduced Mesa for the GPU (package `mesa-freedreno`, Mesa 26.3.0-rc3 behind Debian's
+with venv, DejaVu fonts, a reduced Mesa for the GPU (package `mesa-freedreno`, Mesa 26.3.0 behind Debian's
 libglvnd, no LLVM: [docs/kernel.md](../docs/kernel.md#mesa)); the kernel, modules (including `snd-soc-tas5782m` and,
 when they are in the parts, `vcnl4000` and the rebuilt `venus-core`), firmware and `msm-firmware-loader`. Details in
 [docs/boot.md](../docs/boot.md).

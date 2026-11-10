@@ -35,9 +35,11 @@
 set -euo pipefail
 umask 022
 
-VER=${MESA_VERSION:-26.3.0-rc3}
+VER=${MESA_VERSION:-26.3.0}
 case "$VER" in
-    # signature of mesa-26.3.0-rc3.tar.xz checked against the release manager's key (archive.mesa3d.org has no .sha256sum)
+    # signatures checked against the release managers' keys (docs/release-maintainers-keys.asc in the tarball;
+    # archive.mesa3d.org has no .sha256sum)
+    26.3.0) SUM=91d729aa68bb89e4ec857841300bbe922bcb3e52b1f97566ca83930d3b28343a ;;
     26.3.0-rc3) SUM=3600c01f11439628d0a85de5ed9cb76f297d13e9783cdeecb91aa685055c9942 ;;
     *) SUM=${MESA_SHA256:-} ;;
 esac
