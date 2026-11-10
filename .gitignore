@@ -3,6 +3,7 @@ image/config.env
 # device files (kernel, firmware, modules): never in the repository
 image/parts/
 *.ko
+*.dtb
 *.img
 *.img.gz
 *.bin

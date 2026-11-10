@@ -17,6 +17,7 @@
 #                      vcnl4000.ko (optional, light sensor: driver/vcnl4000)
 #                      venus-core.ko (optional, video decoder: driver/venus)
 #                      libwpewebkit-2.0-1_<ver>_arm64.deb (only with WEB=1: image/build-wpe.sh)
+#                      s5kc505a.ko + apq8053-lenovo-cd-18781y-camera.dtb (only with CAMERA=1: driver/s5kc505a)
 #          AIRPLAY=1 needs nothing in PARTS_DIR (Debian packages only; venus-core.ko for screen mirroring)
 #          image/rootfs/ of this repository, and optionally the CUSTOMIZE script
 # Output:  $WORK_DIR/out/thinksmart-debian-YYYYMMDD.img (sparse) + .img.gz + .sha256
@@ -46,6 +47,7 @@ SYSTEM_SECTORS=${SYSTEM_SECTORS:-14280671}
 CUSTOMIZE=${CUSTOMIZE:-}
 WEB=${WEB:-0}
 AIRPLAY=${AIRPLAY:-0}
+CAMERA=${CAMERA:-0}
 DEBIAN_MIRROR=${DEBIAN_MIRROR:-http://deb.debian.org/debian}
 cd "$REPO"
 P=$(cd "${PARTS_DIR:-image/parts}" && pwd)
@@ -59,6 +61,8 @@ KVER=7.1.3-msm8953
 P1_START=2048; P1_SECTORS=497664
 P2_START=499712
 TODAY=$(date +%Y%m%d)
+DTB=apq8053-lenovo-cd-18781y.dtb
+CAMERA_DTB=apq8053-lenovo-cd-18781y-camera.dtb
 LOOP1=
 LOOP2=
 
@@ -135,6 +139,21 @@ case "$AIRPLAY" in
     0|"") AIRPLAY=0 ;;
     1)  ;;
     *)  echo "AIRPLAY must be 0 or 1" >&2; exit 1 ;;
+esac
+# CAMERA=1: front camera (driver/s5kc505a). Its DTB is the kernel package's one rebuilt with the patch: only the
+# exact file pinned in driver/s5kc505a/dtb.sha256 (built by CI) is accepted, because lk2nd boots it.
+case "$CAMERA" in
+    0|"") CAMERA=0 ;;
+    1)  for f in s5kc505a.ko "$CAMERA_DTB"; do
+            [ -s "$P/$f" ] || { echo "CAMERA=1 but no $P/$f: see driver/s5kc505a/README.md" >&2; exit 1; }
+        done
+        grep -aq "vermagic=$KVER SMP preempt mod_unload aarch64" "$P/s5kc505a.ko" || \
+            { echo "$P/s5kc505a.ko is not built for $KVER (vermagic)" >&2; exit 1; }
+        want=$(awk -v f="$CAMERA_DTB" '$2 == f {print $1}' "$REPO/driver/s5kc505a/dtb.sha256")
+        [ "$(sha256sum < "$P/$CAMERA_DTB" | cut -d' ' -f1)" = "$want" ] || \
+            { echo "$P/$CAMERA_DTB is not the one in driver/s5kc505a/dtb.sha256: rebuild it (driver/s5kc505a)" >&2; exit 1; }
+        PACKAGES="$PACKAGES v4l-utils" ;;
+    *)  echo "CAMERA must be 0 or 1" >&2; exit 1 ;;
 esac
 for f in boot.tar modules-$KVER.tar firmware.tar ucm.tar snd-soc-tas5782m.ko; do
     [ -s "$P/$f" ] || { echo "missing $P/$f (see docs/kernel.md)" >&2; exit 1; }
@@ -341,6 +360,20 @@ sed -e "s/@BOOT_UUID@/$BOOT_UUID/; s/@ROOT_UUID@/$ROOT_UUID/" "$FS/boot/extlinux
 for f in vmlinuz initramfs apq8053-lenovo-cd-18781y.dtb dtbs/qcom/apq8053-lenovo-cd-18781y.dtb; do
     [ -s "$R/boot/$f" ] || { echo "missing /boot/$f in boot.tar" >&2; exit 1; }
 done
+if [ "$CAMERA" = 1 ]; then
+    # the camera DTB is the patched source of boot.tar's DTB: refuse a boot.tar whose DTB is not that source's
+    want=$(awk -v f="$DTB" '$2 == f {print $1}' "$REPO/driver/s5kc505a/dtb.sha256")
+    [ "$(sha256sum < "$R/boot/$DTB" | cut -d' ' -f1)" = "$want" ] || \
+        { echo "/boot/$DTB of boot.tar is not the one the camera DTB was made from (driver/s5kc505a/dtb.sha256)" >&2; exit 1; }
+    # next to the original, which stays as it is; lk2nd loads the file named by `fdt` (fdtdir would win over it)
+    install -m 0644 "$P/$CAMERA_DTB" "$R/boot/$CAMERA_DTB"
+    cp -p "$R/boot/extlinux/extlinux.conf" "$R/boot/extlinux/extlinux.conf.nocamera"
+    sed -i "s|^\([[:space:]]*\)fdtdir /\$|\1fdt /$CAMERA_DTB|" "$R/boot/extlinux/extlinux.conf"
+    if ! grep -q "^[[:space:]]*fdt /$CAMERA_DTB\$" "$R/boot/extlinux/extlinux.conf" || \
+       grep -q '^[[:space:]]*fdtdir' "$R/boot/extlinux/extlinux.conf"; then
+        echo "extlinux.conf: could not replace fdtdir with fdt" >&2; exit 1
+    fi
+fi
 rm -rf "$R/usr/lib/modules/$KVER"; mkdir -p "$R/usr/lib/modules"
 tar -xf "$P/modules-$KVER.tar" -C "$R/usr/lib/modules" --no-same-owner
 mkdir -p "$R/usr/lib/modules/$KVER/extra"
@@ -360,6 +393,8 @@ else
     echo "NOTE: no $P/venus-core.ko: image without the hardware video decoder (see driver/venus/README.md)"
     [ "$AIRPLAY" = 0 ] || echo "NOTE: AIRPLAY=1 without venus-core.ko: screen mirroring has no hardware H.264 decoder"
 fi
+# front camera (CAMERA=1, driver/s5kc505a): udev loads it, i2c-qcom-cci and qcom-camss from the camera DTB
+[ "$CAMERA" = 0 ] || install -m 0644 "$P/s5kc505a.ko" "$R/usr/lib/modules/$KVER/extra/s5kc505a.ko"
 in_chroot ldconfig
 in_chroot depmod -a "$KVER"
 # BMA253 accelerometer (screen rotation): normally udev loads it from the device tree alias
@@ -407,6 +442,7 @@ AirPlay runtime: $([ "$AIRPLAY" = 1 ] && in_chroot dpkg-query -W -f='GStreamer $
 ${EXTRA:-customization: none}
 UUID: boot $BOOT_UUID  root $ROOT_UUID
 EOF
+[ "$CAMERA" = 0 ] || echo "camera: s5kc505a, fdt /$CAMERA_DTB (extlinux.conf.nocamera: without it)" >> "$R/etc/thinksmart-version"
 rm -f "$R/usr/sbin/policy-rc.d" "$R/etc/resolv.conf"
 rm -rf "$R"/var/lib/apt/lists/* "$R"/var/cache/apt/*.bin "$R"/var/cache/apt/archives/*.deb
 find "$R/var/log" -type f -exec truncate -s 0 {} +

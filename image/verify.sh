@@ -6,7 +6,8 @@
 # Opens the image read-only through loop devices and checks: size, MBR, p1 features (lk2nd), UUIDs in extlinux.conf
 # and fstab, the TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile,
 # Python and the ALSA configuration (through qemu); the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
-# EGL and GBM loaded through qemu) and the web layer when /etc/thinksmart-version says it is on.
+# EGL and GBM loaded through qemu) and the web layer when /etc/thinksmart-version says it is on. Front camera
+# (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, the DTBs, the module.
 # Headless boot: dmsetup and the device-mapper udev rules, /boot nofail (fstab generator of the image), and a test
 # device-mapper on p1 (read-only, removed at the end) run through `udevadm test` with the rules of the image and an
 # empty udev database, as after switch_root from the postmarketOS initramfs.
@@ -15,6 +16,7 @@ set -u
 IMG=$1
 SECTORS=${2:-14280671}
 KVER=7.1.3-msm8953
+SUMS=$(cd "$(dirname "$0")/.." && pwd)/driver/s5kc505a/dtb.sha256
 V=$(mktemp -d /tmp/verify-image.XXXXXX)
 ERR=0
 LOOP1=
@@ -176,6 +178,45 @@ for f in conf.d/cd-18781y/cd-18781y.conf Lenovo/cd-18781y/HiFi.conf lib/card-ini
     check "UCM $f" test -s "$V/usr/share/alsa/ucm2/$f"
 done
 check "softvol speaker in /etc/asound.conf" grep -q 'Master Playback Volume' "$V/etc/asound.conf"
+
+echo "-- front camera"
+CAMERA_DTB=apq8053-lenovo-cd-18781y-camera.dtb
+pinned() { awk -v f="$1" '$2 == f {print $1}' "$SUMS" 2>/dev/null; }
+sha() { sha256sum < "$1" | cut -d' ' -f1; }
+if grep -Eq '^[[:space:]]*fdt[[:space:]]' "$E" || [ -e "$MD/extra/s5kc505a.ko" ] || [ -e "$V/boot/$CAMERA_DTB" ]; then
+    # lk2nd: one entry, fdtdir wins over fdt, a missing fdt file means no boot
+    grep -Eq '^[[:space:]]*fdtdir([[:space:]]|$)' "$E" && no "extlinux.conf: fdtdir present (lk2nd takes it over fdt)" \
+        || ok "extlinux.conf: no fdtdir"
+    fdt=$(sed -n 's/^[[:space:]]*fdt[[:space:]]\{1,\}\([^[:space:]]*\).*/\1/p' "$E")
+    if [ "$(echo "$fdt" | grep -c .)" != 1 ]; then
+        no "extlinux.conf: not exactly one fdt line"
+    elif [ "$fdt" != "/$CAMERA_DTB" ]; then
+        no "extlinux.conf: fdt $fdt, expected /$CAMERA_DTB"
+    else
+        ok "extlinux.conf: fdt $fdt"
+    fi
+    if [ -n "$fdt" ] && [ -s "$V/boot/${fdt#/}" ]; then ok "/boot${fdt}: the DTB named by fdt exists"; else no "/boot${fdt}: missing (Linux would not boot)"; fi
+    check "original DTB /boot/apq8053-lenovo-cd-18781y.dtb still present" test -s "$V/boot/apq8053-lenovo-cd-18781y.dtb"
+    [ -n "$(pinned "$CAMERA_DTB")" ] || no "no pinned sums in $SUMS"
+    [ -s "$V/boot/$CAMERA_DTB" ] && [ "$(sha "$V/boot/$CAMERA_DTB")" = "$(pinned "$CAMERA_DTB")" ] \
+        && ok "camera DTB = driver/s5kc505a/dtb.sha256" || no "camera DTB differs from driver/s5kc505a/dtb.sha256"
+    [ "$(sha "$V/boot/apq8053-lenovo-cd-18781y.dtb")" = "$(pinned apq8053-lenovo-cd-18781y.dtb)" ] \
+        && ok "original DTB = the source the camera DTB was patched from" || no "original DTB is not the one in driver/s5kc505a/dtb.sha256"
+    grep -aq 'samsung,s5kc505a' "$V/boot/$CAMERA_DTB" 2>/dev/null && ok "camera DTB: samsung,s5kc505a node" || no "camera DTB without samsung,s5kc505a"
+    NC=$V/boot/extlinux/extlinux.conf.nocamera
+    if [ -e "$NC" ]; then
+        [ "$(grep -c '^label' "$NC")" = 1 ] && grep -Eq '^[[:space:]]*fdtdir /$' "$NC" && ! grep -Eq '^[[:space:]]*fdt[[:space:]]' "$NC" \
+            && ok "extlinux.conf.nocamera: one entry with fdtdir / (to go back)" || no "extlinux.conf.nocamera"
+    fi
+    vm=$(grep -ao 'vermagic=[^[:cntrl:]]*' "$MD/extra/s5kc505a.ko" 2>/dev/null)
+    [ "$vm" = "vermagic=$KVER SMP preempt mod_unload aarch64" ] && ok "s5kc505a.ko: $vm" || no "s5kc505a.ko: vermagic '${vm#vermagic=}', expected $KVER"
+    grep -q '^extra/s5kc505a.ko:' "$MD/modules.dep" && ok "modules.dep: extra/s5kc505a.ko" || no "modules.dep without s5kc505a"
+    grep -q 'samsung,s5kc505a' "$MD/modules.alias" && ok "modules.alias: samsung,s5kc505a" || no "modules.alias without s5kc505a"
+    if installed v4l-utils; then ok "v4l-utils $(dpkgq -W -f='${Version}' v4l-utils)"; else no "v4l-utils not installed"; fi
+else
+    grep -Eq '^[[:space:]]*fdtdir /$' "$E" && ok "camera off: extlinux.conf with fdtdir / (the kernel package's DTB)" \
+        || no "extlinux.conf without fdtdir / and without fdt"
+fi
 
 echo "-- GPU: reduced Mesa"
 ML=$V/usr/lib/aarch64-linux-gnu
