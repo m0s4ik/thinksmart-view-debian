@@ -101,6 +101,17 @@
   [driver/vcnl4000](../driver/vcnl4000/README.md)). Reliable for "a hand in front of the screen", not for "someone in
   the room". With the driver's own defaults it reads 0.
 
+## Camera
+
+- With the camera installed (modules loaded by udev) the device boots in **24.2 s**, as without it, also right after
+  a capture and a warm reboot (measured twice, 2026-11-10).
+- **Open: one slow boot (85 s), seen once and not reproduced.** It came right after the first camera session (modules
+  loaded by hand, three captures, warm reboot): everything was 3-17 times slower from about the first second of the
+  kernel, before any module or user space ran, and back to normal speed right after `qcom-camss` probed (~80 s). No
+  interrupt storm, normal temperatures, no kernel errors. The cause is not known. Side effect: the `/boot` device came
+  up after the 15 s `x-systemd.device-timeout` of fstab, so `/boot` was not mounted in that boot (`systemctl start
+  boot.mount` mounts it once the device is there).
+
 ## Not done yet
 
 - Faster boot (initramfs framebuffer wait).

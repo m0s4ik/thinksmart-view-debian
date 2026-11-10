@@ -1,8 +1,11 @@
 # S5KC505A front camera (driver + device tree)
 
-**Status: raw frames work on the 7.1.3 kernel of this system** (tried on one device, 2026-11-10): the sensor
-answers with chip ID 0x5034, test pattern and real scene captured through CAMSS with `v4l2-ctl`, no errors in the
-kernel log. libcamera has not been tried. The camera needs a patched DTB, so it is optional and not in the image.
+**Status: raw frames work on the 7.1.3 kernel of this system** (one device, 2026-11-10): installed as below (module
+in `extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`), udev loads `i2c-qcom-cci`, `s5kc505a` and
+`qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene captured through CAMSS with
+`v4l2-ctl`, no errors in the kernel log. Boot time unchanged (24.2 s); one isolated slow boot is still unexplained
+([known-issues.md](../../docs/known-issues.md#camera)). libcamera has not been tried. The camera needs a patched DTB,
+so it is optional and not in the image.
 
 The ThinkSmart View's front camera is a Samsung **S5KC505A** (5 Mpixel, RAW10 GRBG, 2 CSI-2 lanes at 480 MHz, 24 MHz
 MCLK) on the camera I²C controller (CCI) of the SoC. Two pieces are needed on top of the frozen 7.1.3 kernel:
@@ -105,6 +108,10 @@ sed -i 's|^\([[:space:]]*\)fdtdir /$|\1fdt /apq8053-lenovo-cd-18781y-camera.dtb|
 install -m 644 s5kc505a.ko /usr/lib/modules/7.1.3-msm8953/extra/ && depmod -a 7.1.3-msm8953
 sync && systemctl reboot
 ```
+
+udev then loads the camera modules by itself (`i2c-qcom-cci`, `s5kc505a`, `qcom-camss`); the sensor's subdevice,
+`/dev/media*` and the `msm_vfe*_video*` nodes appear about 21 s after power-on. The live DT should have
+`rotation = <0>` (`/proc/device-tree/soc@0/cci@1b0c000/i2c-bus@0/camera@37/rotation`).
 
 Back: `cp /boot/extlinux/extlinux.conf.nocamera /boot/extlinux/extlinux.conf`, remove `extra/s5kc505a.ko`,
 `depmod -a`, reboot. If Linux does not come up, boot `boot-current.img` with `fastboot boot` and do the same.

@@ -25,7 +25,8 @@ What we found on our unit (Himax panel variant) with the postmarketOS kernel 7.1
 
 ## Camera
 
-Works for raw frames on the 7.1.3 kernel (tried on one device, 2026-11-10): chip ID 0x5034 at 0x37, the sensor's
+Works for raw frames on the 7.1.3 kernel (installed on one device, 2026-11-10; the modules load at boot through
+udev and the boot time does not change): chip ID 0x5034 at 0x37, the sensor's
 colour bars and a real scene at 1304×980 through CSIPHY0 → CSID0 → ISPIF0 → VFE0 RDI0 (`SGRBG10_1X10`, `pgAA` in
 memory) with `media-ctl`/`v4l2-ctl`, no errors in the kernel log. Everything is in
 [driver/s5kc505a](../driver/s5kc505a/README.md). What it takes:
@@ -41,7 +42,8 @@ memory) with `media-ctl`/`v4l2-ctl`, no errors in the kernel log. Everything is 
   changes nothing else. Because of this patched DTB the camera is **optional** and not in the image.
 - **Open**: RPM reports L2 at 1.200 V, the PMIC register at 1.175 V; libcamera (simple pipeline handler with the
   Software ISP, 0.7.1 in trixie-backports) not tried; no sensor tuning, so colours from a raw frame are only a quick
-  grey-world guess.
+  grey-world guess. One slow boot (85 s) seen once after the first camera session, not reproduced
+  ([known-issues.md](known-issues.md#camera)).
 - Realistic uses: presence detection at 1304×980 binned, snapshots on request; the lens cover (GPIO 87) does not cut
   the sensor's power, so software has to check it.
 
