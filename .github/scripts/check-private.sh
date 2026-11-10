@@ -24,7 +24,7 @@ report() {  # report DESCRIPTION REGEX [grep options]
 
 report "private IPv4 address" '(^|[^0-9.])(192\.168|10\.[0-9]{1,3}|172\.(1[6-9]|2[0-9]|3[01]))\.[0-9]{1,3}\.[0-9]{1,3}([^0-9]|$)'
 report "MAC address" '(^|[^0-9a-f:])([0-9a-f]{2}:){5}[0-9a-f]{2}([^0-9a-f:]|$)' -i
-report "home host name" '[a-z0-9-]+\.(home|lan|internal)([^a-z0-9.-]|$)' -i
+report "home host name" '[a-z0-9-]+\.(home|lan|internal)([^a-z0-9._-]|$)' -i
 report "token" '(ghp_|gho_|github_pat_)[A-Za-z0-9_]{20,}|eyJ[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}'
 report "private key" '-----BEGIN [A-Z ]*PRIVATE KEY-----'
 
