@@ -1,8 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Andrea Mattera
 # Checks on every push and pull request: shell scripts (shellcheck), no private data in the repository, and the
-# TAS5782M driver builds for the postmarketOS 7.1.3 kernel exactly as in driver/tas5782m/README.md. The image itself
-# cannot be built here: it needs kernel parts taken from a device.
+# TAS5782M driver builds for the postmarketOS 7.1.3 kernel exactly as in driver/tas5782m/README.md (with the optional
+# modules and the camera DTB of driver/s5kc505a). The image itself cannot be built here: it needs kernel parts taken
+# from a device.
 name: CI
 
 on:
@@ -37,7 +38,7 @@ jobs:
         run: .github/scripts/check-private.sh
 
   driver:
-    name: Kernel modules for 7.1.3-msm8953 (TAS5782M, VCNL4000, venus, poweroff)
+    name: Kernel modules for 7.1.3-msm8953 (TAS5782M, VCNL4000, venus, poweroff, S5KC505A) and camera DTB
     runs-on: ubuntu-24.04
     container: debian:trixie
     env:
@@ -108,6 +109,38 @@ jobs:
         run: |
           $KMAKE -C /tmp/kernel -j"$(nproc)" KBUILD_MODPOST_WARN=1 M="$PWD/driver/thinksmart-poweroff" modules
           /sbin/modinfo -F vermagic driver/thinksmart-poweroff/thinksmart-poweroff.ko | grep -q "^$KVER SMP preempt mod_unload aarch64"
+      - name: Build the front camera module (driver/s5kc505a)
+        run: |
+          $KMAKE -C /tmp/kernel -j"$(nproc)" KBUILD_MODPOST_WARN=1 M="$PWD/driver/s5kc505a" modules
+          /sbin/modinfo -F vermagic driver/s5kc505a/s5kc505a.ko | grep -q "^$KVER SMP preempt mod_unload aarch64"
+          /sbin/modinfo -F alias driver/s5kc505a/s5kc505a.ko | grep -q 'samsung,s5kc505a'
+      - uses: actions/upload-artifact@v7
+        with:
+          name: s5kc505a-${{ env.KVER }}
+          path: driver/s5kc505a/s5kc505a.ko
+          if-no-files-found: error
+      - name: Build the camera DTB (driver/s5kc505a/cd-18781y-front-camera.patch)
+        run: |
+          # the unpatched source must rebuild the kernel package's DTB (the one in boot.tar) byte for byte, and the
+          # patched one must be the DTB image/build.sh accepts: both are pinned in driver/s5kc505a/dtb.sha256
+          dts=arch/arm64/boot/dts/qcom
+          mkdir -p out-dtb
+          $KMAKE -C /tmp/kernel qcom/apq8053-lenovo-cd-18781y.dtb
+          cp /tmp/kernel/$dts/apq8053-lenovo-cd-18781y.dtb out-dtb/
+          patch -d /tmp/kernel -p1 < driver/s5kc505a/cd-18781y-front-camera.patch
+          rm /tmp/kernel/$dts/apq8053-lenovo-cd-18781y.dtb
+          $KMAKE -C /tmp/kernel qcom/apq8053-lenovo-cd-18781y.dtb
+          cp /tmp/kernel/$dts/apq8053-lenovo-cd-18781y.dtb out-dtb/apq8053-lenovo-cd-18781y-camera.dtb
+          (cd out-dtb && sha256sum --strict -c ../driver/s5kc505a/dtb.sha256)
+          if cmp -s out-dtb/apq8053-lenovo-cd-18781y.dtb out-dtb/apq8053-lenovo-cd-18781y-camera.dtb; then
+            echo "the patch changed nothing" >&2; exit 1
+          fi
+          grep -aq 'samsung,s5kc505a' out-dtb/apq8053-lenovo-cd-18781y-camera.dtb
+      - uses: actions/upload-artifact@v7
+        with:
+          name: cd-18781y-camera-dtb
+          path: out-dtb/apq8053-lenovo-cd-18781y-camera.dtb
+          if-no-files-found: error
 
   mesa:
     name: Reduced Mesa (freedreno) for aarch64
