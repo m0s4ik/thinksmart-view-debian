@@ -33,6 +33,8 @@
   `etc/deviceinfo` containing `deviceinfo_no_framebuffer="true"` (the kernel reads concatenated archives in order).
   Untested; a broken initramfs needs EDL to recover.
 - lk2nd supports a **single entry** in `extlinux.conf`.
+- `kernel.panic` is 0 and there is no watchdog device: after a kernel panic the device stays stopped until the power
+  is cut.
 - Harmless messages: `Failed to set OPP config` on cpu0, `psci: failed to set PC mode`.
 - **Suspend works** (`systemctl suspend`, s2idle, the only mode the kernel offers): screen off, under 0.5 W at the
   wall (a smart plug with 1 W resolution reads 0 W, against ~1 W idle with the screen on), Wi-Fi off. **Vol+ and Vol−
@@ -102,5 +104,7 @@
 ## Not done yet
 
 - Faster boot (initramfs framebuffer wait).
-- Camera ([hardware.md](hardware.md)).
+- Camera in the image: raw frames work with a patched DTB and an extra module, installed by hand
+  ([driver/s5kc505a](../driver/s5kc505a/README.md)); libcamera not tried, no tuning. RPM reports the sensor's VDIG rail
+  (L2) at 1.200 V, the PMIC register at 1.175 V: not explained yet.
 - A newer kernel (the image is frozen on 7.1.3).

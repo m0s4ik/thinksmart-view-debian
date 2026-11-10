@@ -12,8 +12,12 @@ The image is the whole `system` partition after repartitioning, with an MBR insi
 - **p1**, sector 2048, 497664 sectors, type `ef`, bootable: **ext2** with 1 KiB blocks and the same minimal feature
   set as postmarketOS (`ext_attr resize_inode dir_index filetype sparse_super large_file`; no
   `extent`/`64bit`/`metadata_csum`/journal: lk2nd reads it), label `pmOS_boot`. Contains `vmlinuz`, `initramfs`,
-  `config`, `System.map`, the flat DTBs **and** `dtbs/qcom/…` (it is unclear which one lk2nd reads with `fdtdir /`),
-  and `extlinux/extlinux.conf` with **a single entry**.
+  `config`, `System.map`, the flat DTBs **and** `dtbs/qcom/…`, and `extlinux/extlinux.conf` with **a single entry**.
+  With `fdtdir /` lk2nd (its `extlinux.c`) looks for its DTB name `apq8053-lenovo-cd-18781y` as `/qcom/<name>.dtb`,
+  then `/qcom-<name>.dtb`, then `/<name>.dtb`: on this partition only the last exists, so it reads the **flat**
+  `/apq8053-lenovo-cd-18781y.dtb` (the copy in `dtbs/qcom/` is identical and unused). `fdt /<file>.dtb` loads another
+  DTB (the camera one, [driver/s5kc505a](../driver/s5kc505a/README.md)); when both are present **`fdtdir` wins**, so
+  replace the line. A missing file makes lk2nd skip the entry instead of booting it.
 - **p2**, sector 499712 to the end: **ext4** (no `metadata_csum`, like postmarketOS), label `pmOS_root`.
 
 Kernel command line: the postmarketOS one plus `consoleblank=0 vt.global_cursor_default=0` (no blanking, no cursor)

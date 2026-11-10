@@ -63,7 +63,8 @@ optional layers off.</sub>
 | 🚀 **Headless boot** | ready in ~25 s, survives without a keyboard (no emergency-mode dead ends) |
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
 
-Not yet: camera (sensor driver missing). `poweroff` does not stay off with the power supply plugged in (use suspend,
+Optional and installed by hand: the front camera (raw frames through V4L2 with a patched DTB and an extra module,
+[driver/s5kc505a](driver/s5kc505a/README.md)). `poweroff` does not stay off with the power supply plugged in (use suspend,
 or `systemctl halt` before unplugging). See [known issues](docs/known-issues.md).
 
 ## What's new in v0.3
@@ -120,7 +121,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 | [Hardware](docs/hardware.md) | panel, audio, Wi-Fi, sensors, keys, camera |
 | [Known issues](docs/known-issues.md) | what does not work (yet) |
 | [`image/`](image/README.md) | the build script, its options (web layer, AirPlay runtime) and customization hook |
-| [`driver/`](driver/) | the speaker driver ([tas5782m](driver/tas5782m/README.md)), the light sensor ([vcnl4000](driver/vcnl4000/README.md)) and video decoder ([venus](driver/venus/README.md)) modules, the experimental [thinksmart-poweroff](driver/thinksmart-poweroff/README.md) |
+| [`driver/`](driver/) | the speaker driver ([tas5782m](driver/tas5782m/README.md)), the light sensor ([vcnl4000](driver/vcnl4000/README.md)), video decoder ([venus](driver/venus/README.md)) and front camera ([s5kc505a](driver/s5kc505a/README.md)) modules, the experimental [thinksmart-poweroff](driver/thinksmart-poweroff/README.md) |
 
 ## Roadmap
 
@@ -135,7 +136,8 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] Fix for the freedreno GMEM loop, proposed upstream
 - [ ] `poweroff` that stays off with the supply plugged in
 - [ ] Faster boot (initramfs framebuffer wait)
-- [ ] Front camera (S5KC505A)
+- [x] Front camera (S5KC505A): raw frames, optional (patched DTB)
+- [ ] Camera in the image (`CAMERA=1`) and through libcamera
 - [ ] FT8201 panel variant
 
 ## Credits
@@ -145,7 +147,7 @@ This project stands on the work of others:
 - **[rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart)**: the TAS5782M driver, lk2nd and bootstrap
   images, the repartitioning script, and the research that made Linux on this device practical.
 - **[jethac/lenovo-thinksmart-view](https://github.com/jethac/lenovo-thinksmart-view)**: mainline work on the device,
-  panel drivers and the camera (S5KC505A) analysis and driver.
+  panel drivers and the camera (S5KC505A) analysis, driver and device tree, used here unchanged.
 - **[Felix Kaechele (FelixKa)](https://github.com/kaechele)**: the device's support in the kernel this image runs
   ([msm8953-mainline/linux](https://github.com/msm8953-mainline/linux)): the ThinkSmart View device tree, the
   FocalTech FT8201 touchscreen (`edt-ft5x06`) and the QCA9379 SDIO Wi-Fi (`ath10k`); the device's postmarketOS port

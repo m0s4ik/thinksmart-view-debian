@@ -9,7 +9,7 @@ None of these binaries are in this repository. `image/build.sh` expects them in 
 
 | File | Content |
 |---|---|
-| `boot.tar` | `/boot` of the device: `vmlinuz`, `initramfs`, `config`, `System.map`, flat DTBs (`apq8053-lenovo-cd-18781y.dtb` and the other msm8953 ones) and `dtbs/qcom/…` |
+| `boot.tar` | `/boot` of the device: `vmlinuz`, `initramfs`, `config`, `System.map`, flat DTBs (`apq8053-lenovo-cd-18781y.dtb`, the one lk2nd reads, and the other msm8953 ones) and `dtbs/qcom/…` |
 | `modules-7.1.3-msm8953.tar` | `/usr/lib/modules/7.1.3-msm8953` |
 | `firmware.tar` | `/lib/firmware` (ath10k QCA9379, Adreno a530/a506 zap, TAS5782M DSP, `regulatory.db`, …) |
 | `ucm.tar` | UCM profile of the ThinkSmart: `conf.d/cd-18781y`, `Lenovo/cd-18781y`, `codecs/msm8953-wcd` |
@@ -18,6 +18,11 @@ None of these binaries are in this repository. `image/build.sh` expects them in 
 | `venus-core.ko` | optional: the video decoder core rebuilt with the mainline HFI parser ([driver/venus/README.md](../driver/venus/README.md)); replaces the kernel package's one |
 | `mesa-freedreno_<version>_arm64.deb` | reduced Mesa for the GPU (freedreno only, EGL, GBM, OpenGL ES, Wayland platform, no LLVM, ~22 MB installed), built by `image/build-mesa.sh` (see [Mesa](#mesa) below) |
 | `libwpewebkit-2.0-1_*~bpo13+1_arm64.deb` (+ `-dev`, `wpewebkit-webdriver`) | optional, only for the web layer (`WEB=1`): WPE WebKit 2.54 backported from Debian forky to Debian 13 (Debian 13's 2.48 cannot use the GPU with Mesa 26), built by `image/build-wpe.sh` on a fast arm64 machine with Docker. The image installs only `libwpewebkit-2.0-1` |
+
+The kernel package's DTB is used as it is. The DTS of msm8953-mainline `v7.1.3-r0` rebuilds it byte for byte
+(`make … qcom/apq8053-lenovo-cd-18781y.dtb` with the `.config` above), which is how the optional camera DTB is made:
+the same source with [driver/s5kc505a](../driver/s5kc505a/README.md)'s patch. `image/build.sh` does not install it
+(nor `s5kc505a.ko`) yet; see that README to install both by hand.
 
 ## Getting them (what we did)
 

@@ -40,6 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
+| `driver/s5kc505a/` | optional front camera: jethac's sensor driver (out of tree) + device tree patch; needs a rebuilt DTB and `fdt` in `extlinux.conf`, installed by hand (not by `build.sh`) |
 
 ## Commands and the checks that must pass
 
@@ -79,6 +80,9 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   `mesa-freedreno`, so it offers to **remove** `mesa-freedreno` instead: read the list of removals before answering yes.
   `-dev` packages (`libgbm-dev`, pulled by GStreamer's or WebKit's `-dev`) do this: build elsewhere.
   `FD_MESA_DEBUG=sysmem` goes in the browser's environment only, never system-wide.
+- The camera DTB ([driver/s5kc505a](driver/s5kc505a/README.md)) changes what lk2nd boots: keep the old DTB, keep a
+  copy of `extlinux.conf`, and ask before rebooting into it. `kernel.panic` is 0 and there is no watchdog, so a hang
+  needs someone at the device.
 - More in [docs/known-issues.md](docs/known-issues.md).
 
 ## Before committing
