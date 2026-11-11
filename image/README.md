@@ -9,9 +9,11 @@ built into the image with a [customization script](#customization) or installed 
 
 - A Debian or Ubuntu machine (x86_64 or arm64; a VM or container with loop devices works), root, ~10 GB free in
   `WORK_DIR` for the build itself. The host packages `build.sh` needs (`debootstrap qemu-user-static binfmt-support
-  pigz python3 fdisk e2fsprogs`, and `systemd udev dmsetup nftables` for `verify.sh`) are installed by `build.sh` if
-  missing (`verify.sh` run on its own stops with the names of the tools it lacks); the build dependencies of
-  `build-mesa.sh` and of the driver are not (install them by hand, see their own instructions).
+  pigz python3 fdisk e2fsprogs`, `systemd udev dmsetup nftables` for `verify.sh`, and `git` for the commit in
+  `/etc/thinksmart-version`) are installed by `build.sh` if missing (`verify.sh` run on its own stops with the names
+  of the tools it lacks); the build dependencies of `build-mesa.sh` and of the driver are not (install them by hand,
+  see their own instructions). Without git metadata (a tarball, or a git worktree mounted in a container without its
+  main repository's `.git`) the image says `repository: unknown`.
 - The device files in `image/parts/` ([docs/kernel.md](../docs/kernel.md)): `boot.tar`, `modules-7.1.3-msm8953.tar`,
   `firmware.tar`, `ucm.tar` (with `fetch-parts.sh` from a device running postmarketOS 7.1.3),
   `snd-soc-tas5782m.ko` ([driver/tas5782m](../driver/tas5782m/README.md)) and

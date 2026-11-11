@@ -197,8 +197,8 @@ mkdir -p "$C/apt/partial" "$OUT"
 step "host packages"
 missing=
 # systemd, udev, dmsetup and nftables: for verify.sh (systemctl --root, udevadm verify/test, the test device-mapper,
-# nft -c), which runs at the end
-for p in debootstrap qemu-user-static binfmt-support pigz python3 fdisk e2fsprogs systemd udev dmsetup nftables; do
+# nft -c), which runs at the end; git: the commit in /etc/thinksmart-version
+for p in debootstrap qemu-user-static binfmt-support pigz python3 fdisk e2fsprogs systemd udev dmsetup nftables git; do
     dpkg-query -W -f='${Status}' $p 2>/dev/null | grep -q 'install ok installed' || missing="$missing $p"
 done
 if [ -n "$missing" ]; then
@@ -481,8 +481,12 @@ fi
 
 # --- version and cleanup -------------------------------------------------------------------------------------------
 step "version and cleanup"
-COMMIT=$(git -C "$REPO" rev-parse --short HEAD 2>/dev/null || echo unknown)
-[ -z "$(git -C "$REPO" status --porcelain 2>/dev/null)" ] || COMMIT="$COMMIT+changes"
+# safe.directory on the command line: git refuses a checkout owned by another user ("dubious ownership", e.g. bind
+# mounted into a container) and the user's git config stays untouched. "unknown" without git metadata (a tarball, or a
+# git worktree mounted without the .git directory of its main repository)
+repo_git() { git -c safe.directory="$REPO" -C "$REPO" "$@"; }
+COMMIT=$(repo_git rev-parse --short HEAD 2>/dev/null || echo unknown)
+[ -z "$(repo_git status --porcelain 2>/dev/null)" ] || COMMIT="$COMMIT+changes"
 cat > "$R/etc/thinksmart-version" <<EOF
 thinksmart-view-debian, Debian image built on $(date '+%F %T')
 repository: $COMMIT
