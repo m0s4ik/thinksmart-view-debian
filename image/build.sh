@@ -460,8 +460,9 @@ tar -xf "$P/ucm.tar" -C "$R/usr/share/alsa/ucm2" --no-same-owner
 
 # --- services ------------------------------------------------------------------------------------------------------
 step "services"
+# thinksmart-boot-report: one journal line per boot (time, CPU speed), details when a boot is slow (docs/boot.md)
 in_chroot systemctl enable NetworkManager ssh systemd-timesyncd nftables avahi-daemon msm-firmware-loader \
-    thinksmart-audio thinksmart-light
+    thinksmart-audio thinksmart-light thinksmart-boot-report
 in_chroot systemctl disable NetworkManager-wait-online.service 2>/dev/null || true
 # mixer state is set by thinksmart-audio only: alsactl must not restore a saved volume (or 0) afterwards
 in_chroot systemctl mask alsa-restore.service alsa-state.service

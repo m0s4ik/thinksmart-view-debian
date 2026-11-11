@@ -349,7 +349,8 @@ else
 fi
 
 echo "-- services"
-for s in NetworkManager ssh systemd-timesyncd nftables avahi-daemon msm-firmware-loader thinksmart-audio thinksmart-light; do
+for s in NetworkManager ssh systemd-timesyncd nftables avahi-daemon msm-firmware-loader thinksmart-audio thinksmart-light \
+         thinksmart-boot-report; do
     st=$(enabled "$s"); [ "$st" = enabled ] && ok "$s: $st" || no "$s: $st"
 done
 for s in alsa-restore alsa-state; do
@@ -381,6 +382,12 @@ check "/etc/thinksmart-version" test -s "$V/etc/thinksmart-version"
 grep -q "^VOLUME=" "$V/etc/default/thinksmart-audio" && ok "/etc/default/thinksmart-audio" || no "/etc/default/thinksmart-audio"
 check "thinksmart-audio script" test -x "$V/usr/local/sbin/thinksmart-audio"
 check "thinksmart-light script" test -x "$V/usr/local/sbin/thinksmart-light"
+BR=$V/usr/local/sbin/thinksmart-boot-report
+test -x "$BR" && sh -n "$BR" 2>/dev/null && ok "thinksmart-boot-report script (sh -n)" || no "thinksmart-boot-report script"
+# Type=simple and started early: it must never hold up the boot
+grep -q '^Type=simple$' "$V/etc/systemd/system/thinksmart-boot-report.service" && grep -q '^DefaultDependencies=no$' "$V/etc/systemd/system/thinksmart-boot-report.service" \
+    && ok "thinksmart-boot-report.service: Type=simple, DefaultDependencies=no" || no "thinksmart-boot-report.service"
+grep -q "^SLOW_TOTAL=[0-9]" "$V/etc/default/thinksmart-boot-report" && ok "/etc/default/thinksmart-boot-report" || no "/etc/default/thinksmart-boot-report"
 if [ -e "$MD/extra/vcnl4000.ko" ]; then
     grep -q '^extra/vcnl4000.ko:' "$MD/modules.dep" && ok "modules.dep: extra/vcnl4000.ko (light sensor)" || no "vcnl4000.ko not in modules.dep"
 else

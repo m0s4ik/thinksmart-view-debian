@@ -1,0 +1,40 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Boot report: from the start of userspace, samples CPU speed, frequency and temperature about once a second until
+# the boot has finished, then one line in the journal (journalctl -t thinksmart-boot); a slow boot also gets the
+# samples and the CPU clock state taken while it was slow. Type=simple: it never delays the boot. Settings in
+# /etc/default/thinksmart-boot-report; files in /run/thinksmart-boot (docs/boot.md#boot-report).
+[Unit]
+Description=ThinkSmart View boot report (boot time and CPU speed while booting)
+DefaultDependencies=no
+# debugfs (clk_summary) for the snapshots; systemd mounts it at the very start
+After=sys-kernel-debug.mount
+Conflicts=shutdown.target
+Before=shutdown.target
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/default/thinksmart-boot-report
+ExecStart=/usr/local/sbin/thinksmart-boot-report
+SyslogIdentifier=thinksmart-boot
+RuntimeDirectory=thinksmart-boot
+RuntimeDirectoryPreserve=yes
+TimeoutStopSec=5
+# read-only on /proc, /sys and debugfs; dmesg needs CAP_SYSLOG
+CapabilityBoundingSet=CAP_SYSLOG CAP_DAC_READ_SEARCH
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+PrivateNetwork=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=sysinit.target

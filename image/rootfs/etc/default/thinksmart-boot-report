@@ -1,0 +1,14 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# /etc/default/thinksmart-boot-report: read by thinksmart-boot-report.service at boot (docs/boot.md#boot-report).
+# A boot is reported as SLOW (journal priority warning, followed by every sample and the CPU clock state) when
+# - it takes longer than SLOW_TOTAL seconds (systemd-analyze's total; normal: about 14 s),
+SLOW_TOTAL=30
+# - or the slowest CPU benchmark sample takes SLOW_RATIO times the fastest one or more,
+SLOW_RATIO=5
+# - or any sample takes SLOW_BENCH_MS milliseconds or more (0: off),
+SLOW_BENCH_MS=0
+# - or the boot has not finished MAX_WAIT seconds after the kernel started (the report stops waiting then).
+MAX_WAIT=180
+# Iterations of the benchmark (a shell loop, timed in CPU time of the sampler).
+BENCH_LOOPS=10000
