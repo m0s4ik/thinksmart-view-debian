@@ -123,10 +123,18 @@ would be far smaller: a possible later improvement.
 
 ## Front camera (optional)
 
-`CAMERA=1` in `config.env` installs the S5KC505A sensor driver (`s5kc505a.ko` in `extra/`), `v4l-utils` and the
-libcamera userspace that was tried on a device (from Debian trixie main, without recommends: `libcamera0.4`,
-`libcamera-ipa` with the software ISP of the `simple` pipeline handler, `gstreamer1.0-libcamera` for `libcamerasrc`,
-`gstreamer1.0-tools` for `gst-launch-1.0`; no Debian Mesa), and puts
+`CAMERA=1` in `config.env` installs the S5KC505A sensor driver (`s5kc505a.ko` in `extra/`, with the flip controls
+libcamera uses to turn the frame upright), `v4l-utils` and the libcamera userspace that was tried on a device:
+`libcamera0.7`, `libcamera-ipa` (the software ISP of the `simple` pipeline handler, debayering on the GPU through
+`mesa-freedreno`) and `gstreamer1.0-libcamera` (`libcamerasrc`) from **trixie-backports**, their dependencies and
+`gstreamer1.0-tools` (`gst-launch-1.0`) from trixie, without recommends and without Debian Mesa. trixie's own
+libcamera 0.4 debayers on the CPU and does not follow the sensor's flips. The image keeps
+`/etc/apt/sources.list.d/debian-backports.sources` (trixie-backports at Debian's default priority, no pin): `apt
+upgrade` updates these three packages from there and takes nothing else from it unless asked
+(`apt install <package>/trixie-backports`). `/etc/udev/rules.d/70-camera-dma-heap.rules` gives group `video` the
+dma-buf heaps (`/dev/dma_heap/*`, root only by default); a program that is not root needs groups `video` and
+`render` (the GPU debayer opens `/dev/dri/renderD128`): `SupplementaryGroups=video render` in its unit (the image
+adds no user to them). It also puts
 the camera DTB (`apq8053-lenovo-cd-18781y-camera.dtb`) in `/boot` **next to** the kernel package's DTB, which stays
 as it is. lk2nd reads one entry and `fdtdir` wins over `fdt`, so `extlinux.conf` gets
 `fdt /apq8053-lenovo-cd-18781y-camera.dtb` **instead of** `fdtdir /`, and `cma=128M` at the end of its `append`
@@ -137,16 +145,18 @@ line: 128 MB of contiguous memory instead of the kernel's default 32 MB, which l
 DTB whose sha256 is in `driver/s5kc505a/dtb.sha256`, on top of a `boot.tar` whose DTB is the one it was patched from:
 the DTB is what lk2nd boots, and a DTB that does not boot needs someone at the device
 ([driver/s5kc505a](../driver/s5kc505a/README.md#installing)). With `CAMERA=0` the image is the same as without the
-option. A `CAMERA=1` image of v0.4-rc2 (`WEB=1 AIRPLAY=1 CAMERA=1`, 451 packages) was flashed and booted on one device:
-lk2nd booted the camera DTB, no failed units, `CmaTotal` 131072 kB, the sensor found, libcamera at 2560×1600, boot
-13.1 s.
+option. A `CAMERA=1` image of an earlier v0.4-rc2 commit (`WEB=1 AIRPLAY=1 CAMERA=1`, 451 packages; libcamera 0.4
+and the driver without flips) was flashed and booted on one device: lk2nd booted the camera DTB, no failed units,
+`CmaTotal` 131072 kB, the sensor found, libcamera at 2560×1600, boot 13.1 s. The flip driver, libcamera 0.7.1 and the
+udev rule were then tried by hand on that device (upright frames, about 14 fps at 2560×1600, a user without
+privileges in groups `video` and `render`), not yet as a flashed image.
 
-Measured on test builds of v0.4-rc1 (same configuration otherwise): `CAMERA=1` adds 20 packages and 48 MB to the
-plain image (218 → 238 packages, root 472 → 520 MB, `.img.gz` 183 → 199 MB): 5 for `v4l-utils`, 15 for libcamera,
-GStreamer's core and base library, liblttng-ust and libyuv. With `WEB=1`, which already has GStreamer, 14 packages and
-13 MB (304 → 318, 777 → 790 MB). It does not include GStreamer's plugins: `videoconvert` (`gstreamer1.0-plugins-base`) and `videoflip`
-(`gstreamer1.0-plugins-good`, which turns the upside-down frame) pull X11 libraries, cairo, PulseAudio and more
-(+24 and +93 packages; no Mesa). An application that needs them installs them
+Measured on test builds (same configuration otherwise): `CAMERA=1` adds 25 packages and 62 MB to the plain image (218
+→ 243 packages, root 472 → 534 MB, `.img.gz` 183 → 202 MB): 5 for `v4l-utils`, 20 for libcamera 0.7 (with libpisp and
+three Boost libraries), GStreamer's core and base library, liblttng-ust and libyuv. With `WEB=1`, which already has
+GStreamer, 19 packages and 27 MB (304 → 323, 777 → 804 MB). It does not include GStreamer's plugins: `videoconvert`
+(`gstreamer1.0-plugins-base`) and `videoflip` (`gstreamer1.0-plugins-good`) pull X11 libraries, cairo, PulseAudio
+and more (+24 and +93 packages; no Mesa). An application that needs them installs them
 ([driver/s5kc505a](../driver/s5kc505a/README.md#libcamera)).
 
 ## Customization
@@ -194,9 +204,12 @@ pipelines use, `ldd` of libplist, `libdns_sd` and the plugins) or off (no GStrea
 too). Front camera (found from `extlinux.conf`, the module or the camera DTB): no `fdtdir`, exactly one `fdt` naming
 the camera DTB, `cma=128M` once on the `append` line and after `deviceinfo_no_framebuffer=true`, that file in `/boot`, the original DTB still there, both DTBs as pinned in
 `driver/s5kc505a/dtb.sha256`, `extlinux.conf.nocamera` (with `fdtdir /` and no `cma=`), the module's vermagic, `modules.dep` and `modules.alias`,
-`v4l-utils`, the libcamera packages, `ipa_soft_simple.so` with its signature and `soft_ipa_proxy`, no Debian Mesa,
-`ldd` of libcamera, the IPA and the GStreamer plugin and `gst-inspect-1.0 libcamerasrc` through qemu; without it,
-`fdtdir /`, no `cma=` (and no GStreamer when the web layer and the AirPlay runtime are off too).
+`v4l-utils`, libcamera 0.7 from trixie-backports (not 0.4), `ipa/ipa_soft_simple.so` with its signature and
+`soft_ipa_proxy`, no Debian Mesa, the trixie-backports source and no apt pin naming backports, the `dma_heap` udev
+rule (`udevadm verify`), groups `video` and `render`, `ldd` of libcamera (with `libEGL.so.1` and `libGLESv2.so.2`
+resolved for the GPU debayer), the IPA and the GStreamer plugin and `gst-inspect-1.0 libcamerasrc` (0.7) through
+qemu; without it, `fdtdir /`, no `cma=`, no backports source or `dma_heap` rule (and no GStreamer when the web layer
+and the AirPlay runtime are off too).
 
 ## After the first boot
 
@@ -215,8 +228,7 @@ the camera DTB, `cma=128M` once on the `append` line and after `deviceinfo_no_fr
   `gstreamer1.0-plugins-bad-airplay_*_arm64.deb` an `AIRPLAY=1` build leaves in `$WORK_DIR/out/`.
 - From v0.3 to v0.4-rc1 without reflashing: nothing changes unless you want the front camera. For it, install the
   module and the camera DTB by hand as in [driver/s5kc505a](../driver/s5kc505a/README.md#installing) (that page also
-  says how to go back), then `apt install --no-install-recommends v4l-utils` and the packages of `CAMERA_PACKAGES`
-  in `build.sh` (libcamera).
+  says how to go back), then libcamera as in the next item (the 0.4 packages of rc1 are replaced there).
 - From v0.4-rc1 to v0.4-rc2 without reflashing (all three done by hand on a device): the longer `/boot` timeout, on every
   device, then `systemctl daemon-reload`:
   `sed -i 's/x-systemd.device-timeout=15/x-systemd.device-timeout=90/' /etc/fstab`. With the camera, `cma=128M` on
@@ -247,3 +259,30 @@ the camera DTB, `cma=128M` once on the `append` line and after `deviceinfo_no_fr
   (deviceinfo_no_framebuffer)` instead of `ERROR: /dev/fb0 did not appear after waiting 10 seconds!`, and
   `systemd-analyze` says about 14 s. `extlinux.conf.nocamera`, if there is one, can get the same change the same way
   (the images of rc2 have it there too).
+
+  With the camera, also the flip driver, libcamera 0.7.1 and the `dma_heap` rule (done by hand on a device running a
+  `CAMERA=1` image of rc2's earlier commit 3a88a34): the rebuilt `s5kc505a.ko` (CI artifact `s5kc505a-7.1.3-msm8953`,
+  or [driver/s5kc505a](../driver/s5kc505a/README.md#building)) replaces the old one, and the reboot at the end loads it
+  (stop programs that use the camera first):
+
+  ```sh
+  install -m 644 s5kc505a.ko /usr/lib/modules/7.1.3-msm8953/extra/s5kc505a.ko && depmod -a 7.1.3-msm8953
+  cat > /etc/apt/sources.list.d/debian-backports.sources <<'EOF'
+  Types: deb
+  URIs: http://deb.debian.org/debian
+  Suites: trixie-backports
+  Components: main
+  Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+  EOF
+  apt update
+  apt install --no-install-recommends libcamera0.7/trixie-backports libcamera-ipa/trixie-backports \
+      gstreamer1.0-libcamera/trixie-backports gstreamer1.0-tools    # read the list: no Debian Mesa, nothing removed
+  apt purge libcamera0.4                                              # if apt left it behind
+  echo 'SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"' > /etc/udev/rules.d/70-camera-dma-heap.rules
+  udevadm control --reload && udevadm trigger --subsystem-match=dma_heap
+  systemctl reboot
+  ```
+
+  After it, `v4l2-ctl -d <sensor subdevice> -l` lists `horizontal_flip` and `vertical_flip`, `ls -l /dev/dma_heap`
+  shows group `video`, and `libcamerasrc` frames are upright. Programs that are not root: groups `video` and
+  `render` (`SupplementaryGroups=video render` in their unit, or `usermod -aG video,render <user>`).

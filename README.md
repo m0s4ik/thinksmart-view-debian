@@ -56,7 +56,7 @@ optional layers off.</sub>
 | 🎞️ **Video decoder** | Venus hardware decoder (H.264, HEVC, VP8, VP9, MPEG-2/4) through V4L2, with a rebuilt `venus-core` module: 1080p30 H.264 with ~5% of one core |
 | 🌐 **Web (optional)** | WPE WebKit 2.54 on the GPU with its sandbox, for an application that shows web pages (`WEB=1`) |
 | 📡 **AirPlay runtime (optional)** | GStreamer plugins and libraries for an AirPlay receiver built on UxPlay, shipped by the application (`AIRPLAY=1`) |
-| 📷 **Front camera (optional)** | Samsung S5KC505A with jethac's driver and a patched DTB: raw RAW10 frames up to 2608×1960 through V4L2, libcamera 0.4 up to 2592×1944 with auto exposure (`CAMERA=1`, or [by hand](driver/s5kc505a/README.md#installing)) |
+| 📷 **Front camera (optional)** | Samsung S5KC505A with jethac's driver (plus flip controls) and a patched DTB: raw RAW10 frames up to 2608×1960 through V4L2, libcamera 0.7 with auto exposure and the GPU debayering, upright, ~14 fps at 2560×1600 (`CAMERA=1`, or [by hand](driver/s5kc505a/README.md#installing)) |
 | 🔊 **Speaker** | TAS5782M amplifier with the out-of-tree driver, hardware volume (`Speaker Amp Master`), 16-bit playback |
 | 🎙️ **Microphones** | two digital microphones, ready for wake word and speech recognition |
 | 📶 **Wi-Fi** | QCA9379 (ath10k), NetworkManager profile from the build config |
@@ -72,28 +72,35 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
 ## What's new in v0.4
 
 > [!IMPORTANT]
-> **Release candidate.** v0.4 adds the front camera as an option. A `CAMERA=1` image (`WEB=1 AIRPLAY=1 CAMERA=1`) has
-> been flashed and booted on a device: no failed units, the camera DTB and `cma=128M` in use, the sensor found,
-> raw frames and libcamera at 2560×1600, boot in 13.1 s. With `CAMERA=0` (the default) the image is the same as v0.3
-> (same packages and sizes on test builds) apart from the faster boot and the longer `/boot` timeout of rc2.
+> **Release candidate.** v0.4 adds the front camera as an option. A `CAMERA=1` image (`WEB=1 AIRPLAY=1 CAMERA=1`) of
+> an earlier commit (libcamera 0.4, driver without flips) has been flashed and booted on a device: no failed units,
+> the camera DTB and `cma=128M` in use, the sensor found, raw frames and libcamera at 2560×1600, boot in 13.1 s. The
+> flip controls, libcamera 0.7.1 and the `dma_heap` rule were then tried by hand on that device, not yet as a flashed
+> image. With `CAMERA=0` (the default) the image is the same as v0.3 (same packages and sizes on test builds) apart
+> from the faster boot and the longer `/boot` timeout of rc2.
 
 - **Faster boot, 24 s → 14 s**, on every image: `deviceinfo_no_framebuffer=true` on the kernel command line stops
   the postmarketOS initramfs from waiting 10 s for a framebuffer that cannot appear there. Nothing else in `/boot`
   changes; measured on a device with `systemd-analyze` (13.1-13.8 s, 24.2 s before)
   ([docs/boot.md](docs/boot.md#kernel-command-line)). *(rc2)*
-- **Front camera** (Samsung S5KC505A): jethac's out-of-tree sensor driver, unchanged, and a device tree patch that
-  turns on CAMSS and CCI, the camera rails and the sensor, with `rotation = <180>` (the read-out is upside down on the
-  stand and the sensor cannot flip: applications turn the image). Raw RAW10 frames through V4L2; libcamera 0.4's
-  `simple` pipeline with the software ISP streams 1280×960 and 640×480 with auto exposure
+- **Front camera** (Samsung S5KC505A): jethac's out-of-tree sensor driver and a device tree patch that turns on
+  CAMSS and CCI, the camera rails and the sensor, with `rotation = <180>` (the read-out is upside down on the stand).
+  Raw RAW10 frames through V4L2; libcamera's `simple` pipeline with the software ISP and auto exposure
   ([driver/s5kc505a](driver/s5kc505a/README.md)). *(rc1)*
 - **`CAMERA=1`** in `config.env` (off by default): the module, the camera DTB next to the original one, `fdt` in
-  `extlinux.conf` (the old file kept as `extlinux.conf.nocamera`), `v4l-utils` and libcamera 0.4 from Debian trixie;
-  +20 packages and ~48 MB on the plain image, no Debian Mesa ([image/README.md](image/README.md#front-camera-optional)).
-  `build.sh`, `verify.sh` and CI check both DTBs against `driver/s5kc505a/dtb.sha256`. *(rc1)*
-- **libcamera at full size**: `CAMERA=1` adds `cma=128M` to the kernel command line (128 MB of contiguous memory
-  instead of 32 MB; boot time and free memory unchanged in practice), and 2560×1600 and 2592×1944 stream, about
-  10 fps with the software ISP. Raw frames at the full 2608×1960 work too
+  `extlinux.conf` (the old file kept as `extlinux.conf.nocamera`), `v4l-utils` and libcamera, no Debian Mesa
+  ([image/README.md](image/README.md#front-camera-optional)). `build.sh`, `verify.sh` and CI check both DTBs against
+  `driver/s5kc505a/dtb.sha256`. *(rc1)*
+- **Upright frames**: the driver gets horizontal and vertical flip controls (our change; the Bayer order follows
+  them), and libcamera turns the read-out in the sensor from the DT's rotation. *(rc2)*
+- **libcamera 0.7.1 from trixie-backports** instead of trixie's 0.4: debayering on the GPU, about 25 fps at 1280×960
+  and 14 fps at 2560×1600 (0.4: about 10 fps on the CPU), neutral colours without tuning. `CAMERA=1` keeps the
+  trixie-backports source at Debian's default priority (updates for these packages, nothing else taken from it) and
+  adds `cma=128M` to the kernel command line for full size (128 MB of contiguous memory instead of 32 MB; boot time
+  and free memory unchanged in practice). Raw frames at the full 2608×1960 work too
   ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera)). *(rc2)*
+- **Camera without root**: a udev rule gives group `video` the dma-buf heaps; a program in groups `video` and
+  `render` streams (`SupplementaryGroups=video render` in its unit). *(rc2)*
 - **Lens cover**: `driver/s5kc505a/lens-cover.py` prints whether the cover is open or closed
   ([driver/s5kc505a](driver/s5kc505a/README.md#lens-cover)). *(rc2)*
 - **`/boot` device timeout 90 s** instead of 15 s, on every image: in one slow boot the device came up after 15 s and
@@ -101,8 +108,8 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
 - **Build host tools**: `build.sh` also installs `systemd udev dmsetup nftables`, which `verify.sh` needs on the build
   machine (in a bare `debian:trixie` container they were missing and 13 checks failed for that reason only), and
   `verify.sh` stops with the names of missing tools instead. *(rc2)*
-- Known: no sensor tuning (slight green cast), `libcamerasrc` does not turn the frame, the lens
-  cover switch does not cut the sensor's power ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera),
+- Known: no sensor tuning (colours acceptable, not calibrated), the lens cover switch does not cut the sensor's
+  power ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera),
   [known issues](docs/known-issues.md#camera)).
 
 v0.3 brought Mesa 26.3.0 in `/usr`, the optional web layer and AirPlay runtime, application firewall rules, mDNS, the
@@ -159,10 +166,11 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] `poweroff` that stays off with the supply plugged in
 - [x] Faster boot: no initramfs framebuffer wait, 24 s → 14 s (v0.4-rc2)
 - [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
-- [x] Front camera (S5KC505A): raw frames and libcamera 0.4 at 1280×960, optional (patched DTB)
+- [x] Front camera (S5KC505A): raw frames and libcamera, optional (patched DTB)
 - [x] Camera in the image: `CAMERA=1` (v0.4-rc1; flashed and booted with rc2)
 - [x] libcamera at full size (`cma=128M`, v0.4-rc2)
-- [ ] Camera sensor tuning
+- [x] Upright camera frames (sensor flips) and libcamera 0.7 on the GPU (v0.4-rc2)
+- [ ] Camera sensor tuning (colours are acceptable untuned with libcamera 0.7)
 - [ ] FT8201 panel variant
 
 ## Credits
@@ -172,7 +180,8 @@ This project stands on the work of others:
 - **[rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart)**: the TAS5782M driver, lk2nd and bootstrap
   images, the repartitioning script, and the research that made Linux on this device practical.
 - **[jethac/lenovo-thinksmart-view](https://github.com/jethac/lenovo-thinksmart-view)**: mainline work on the device,
-  panel drivers and the camera (S5KC505A) analysis, driver and device tree, used here unchanged.
+  panel drivers and the camera (S5KC505A) analysis, driver and device tree (the driver used here with flip controls
+  added, the device tree rewritten for 7.1.3).
 - **[Felix Kaechele (FelixKa)](https://github.com/kaechele)**: the device's support in the kernel this image runs
   ([msm8953-mainline/linux](https://github.com/msm8953-mainline/linux)): the ThinkSmart View device tree, the
   FocalTech FT8201 touchscreen (`edt-ft5x06`) and the QCA9379 SDIO Wi-Fi (`ath10k`); the device's postmarketOS port
