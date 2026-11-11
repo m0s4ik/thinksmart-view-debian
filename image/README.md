@@ -206,3 +206,7 @@ the camera DTB, that file in `/boot`, the original DTB still there, both DTBs as
   as in [driver/venus](../driver/venus/README.md#building). For the AirPlay runtime, `apt install
   --no-install-recommends` the packages of `AIRPLAY_PACKAGES` in `build.sh`, then the
   `gstreamer1.0-plugins-bad-airplay_*_arm64.deb` an `AIRPLAY=1` build leaves in `$WORK_DIR/out/`.
+- From v0.3 to v0.4-rc1 without reflashing: nothing changes unless you want the front camera. For it, install the
+  module and the camera DTB by hand as in [driver/s5kc505a](../driver/s5kc505a/README.md#installing) (that page also
+  says how to go back), then `apt install --no-install-recommends v4l-utils` and the packages of `CAMERA_PACKAGES`
+  in `build.sh` (libcamera).

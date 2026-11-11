@@ -4,7 +4,8 @@ Run an **ultra-light Debian 13** on the **Lenovo ThinkSmart View** (CD-18781Y, t
 working **screen, touch, GPU, speaker, microphones, Wi-Fi, sensors and hardware video decoder**. No Android, no
 browser: a clean Linux base with no desktop, for whatever you want to build on it — a voice assistant, a smart-home
 panel, a clock, a kiosk. Two optional layers add what some applications need: a web engine (WPE WebKit) to show web
-pages, and the GStreamer runtime of an AirPlay receiver (UxPlay) for music and screen mirroring.
+pages, and the GStreamer runtime of an AirPlay receiver (UxPlay) for music and screen mirroring; a third one turns on
+the front camera.
 
 <p align="center"><img src="docs/images/thinksmart-view.png" width="720" alt="A ThinkSmart View in landscape showing fastfetch: Debian GNU/Linux 13 (trixie) aarch64, kernel 7.1.3-msm8953, GPU freedreno FD506"></p>
 <p align="center"><sub>The ThinkSmart View running this system: the real <code>fastfetch</code> output (v0.1, no application
@@ -54,6 +55,7 @@ optional layers off.</sub>
 | 🎞️ **Video decoder** | Venus hardware decoder (H.264, HEVC, VP8, VP9, MPEG-2/4) through V4L2, with a rebuilt `venus-core` module: 1080p30 H.264 with ~5% of one core |
 | 🌐 **Web (optional)** | WPE WebKit 2.54 on the GPU with its sandbox, for an application that shows web pages (`WEB=1`) |
 | 📡 **AirPlay runtime (optional)** | GStreamer plugins and libraries for an AirPlay receiver built on UxPlay, shipped by the application (`AIRPLAY=1`) |
+| 📷 **Front camera (optional)** | Samsung S5KC505A with jethac's driver and a patched DTB: raw RAW10 frames through V4L2, libcamera 0.4 at 1280×960 with auto exposure (`CAMERA=1`, or [by hand](driver/s5kc505a/README.md#installing)) |
 | 🔊 **Speaker** | TAS5782M amplifier with the out-of-tree driver, hardware volume (`Speaker Amp Master`), 16-bit playback |
 | 🎙️ **Microphones** | two digital microphones, ready for wake word and speech recognition |
 | 📶 **Wi-Fi** | QCA9379 (ath10k), NetworkManager profile from the build config |
@@ -63,28 +65,33 @@ optional layers off.</sub>
 | 🚀 **Headless boot** | ready in ~25 s, survives without a keyboard (no emergency-mode dead ends) |
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
 
-Optional: the front camera (raw frames through V4L2, libcamera at 1280×960, with a patched DTB and an extra module,
-`CAMERA=1` or by hand, [driver/s5kc505a](driver/s5kc505a/README.md)). `poweroff` does not stay off with the power supply plugged in (use suspend,
-or `systemctl halt` before unplugging). See [known issues](docs/known-issues.md).
+Not yet: libcamera at full size (2560×1600 fails on the 32 MB CMA) and camera tuning. `poweroff` does not stay off
+with the power supply plugged in (use suspend, or `systemctl halt` before unplugging). See
+[known issues](docs/known-issues.md).
 
-## What's new in v0.3
+## What's new in v0.4
 
-- **Mesa 26.3.0** as a Debian package (`mesa-freedreno`) in `/usr`, behind Debian's libglvnd, with the **Wayland
-  platform** (needed by WPE WebKit). It stands in for Debian's `libgbm1` and `libegl-mesa0`, so apt never pulls
-  Debian's Mesa and LLVM. Still no LLVM, X11, Vulkan or video ([docs/kernel.md](docs/kernel.md#mesa)). *(rc1; the release
-  candidates shipped 26.3.0-rc3, v0.3 the final release)*
-- **Optional web layer** (`WEB=1`): WPE WebKit 2.54, backported to Debian 13 by `image/build-wpe.sh`, with bubblewrap
-  for its sandbox ([image/README.md](image/README.md#web-layer-optional)). *(rc1)*
-- **Firewall rules of applications** in `/etc/nftables.d/*.nft`, and **mDNS** with avahi (`<hostname>.local`,
-  service announcements). *(rc2)*
-- **Hardware video decoder**: `venus-core` rebuilt with the mainline HFI parser ([driver/venus](driver/venus/README.md));
-  the kernel package's one does not start. *(rc3)*
-- **Audio**: playback is converted to 16 bit, because 24-bit playback was silent (decoders that output 32 bit, like
-  GStreamer's libav ones, played nothing). *(rc3)*
-- **Optional AirPlay runtime** (`AIRPLAY=1`): the GStreamer plugins and libraries an AirPlay receiver built on UxPlay
-  needs, nothing else ([image/README.md](image/README.md#airplay-runtime-optional)). *(rc3)*
-- Known: freedreno loops forever on some browser render targets; run the web engine with `FD_MESA_DEBUG=sysmem`
-  ([known issues](docs/known-issues.md#gpu-and-web-layer)).
+> [!IMPORTANT]
+> **Release candidate.** v0.4-rc1 adds the front camera as an option. It works on a device installed by hand (same
+> module and DTB), and `CAMERA=1` images build and pass `verify.sh`, but a `CAMERA=1` image has **not been flashed
+> and booted on a device yet**. With `CAMERA=0` (the default) the image is the same as v0.3 (same packages and sizes
+> on test builds).
+
+- **Front camera** (Samsung S5KC505A): jethac's out-of-tree sensor driver, unchanged, and a device tree patch that
+  turns on CAMSS and CCI, the camera rails and the sensor, with `rotation = <180>` (the read-out is upside down on the
+  stand and the sensor cannot flip: applications turn the image). Raw RAW10 frames through V4L2; libcamera 0.4's
+  `simple` pipeline with the software ISP streams 1280×960 and 640×480 with auto exposure
+  ([driver/s5kc505a](driver/s5kc505a/README.md)). *(rc1)*
+- **`CAMERA=1`** in `config.env` (off by default): the module, the camera DTB next to the original one, `fdt` in
+  `extlinux.conf` (the old file kept as `extlinux.conf.nocamera`), `v4l-utils` and libcamera 0.4 from Debian trixie;
+  +20 packages and ~48 MB on the plain image, no Debian Mesa ([image/README.md](image/README.md#front-camera-optional)).
+  `build.sh`, `verify.sh` and CI check both DTBs against `driver/s5kc505a/dtb.sha256`. *(rc1)*
+- Known: full size fails on CMA, no sensor tuning (slight green cast), `libcamerasrc` does not turn the frame, the lens
+  cover switch does not cut the sensor's power ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera),
+  [known issues](docs/known-issues.md#camera)).
+
+v0.3 brought Mesa 26.3.0 in `/usr`, the optional web layer and AirPlay runtime, application firewall rules, mDNS, the
+hardware video decoder and 16-bit audio ([release notes](https://github.com/m0s4ik/thinksmart-view-debian/releases/tag/v0.3)).
 
 ## Installation
 
@@ -136,9 +143,9 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] Fix for the freedreno GMEM loop, proposed upstream
 - [ ] `poweroff` that stays off with the supply plugged in
 - [ ] Faster boot (initramfs framebuffer wait)
-- [x] Front camera (S5KC505A): raw frames, optional (patched DTB)
-- [ ] Camera in the image (`CAMERA=1`, with libcamera 0.4: built and verified, not flashed on a device yet); libcamera
-  at full size (1280×960 works, 2560×1600 fails on CMA)
+- [x] Front camera (S5KC505A): raw frames and libcamera 0.4 at 1280×960, optional (patched DTB)
+- [x] Camera in the image: `CAMERA=1` (v0.4-rc1; built and verified, not flashed on a device yet)
+- [ ] libcamera at full size (2560×1600 fails on the 32 MB CMA) and sensor tuning
 - [ ] FT8201 panel variant
 
 ## Credits
