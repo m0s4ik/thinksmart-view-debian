@@ -66,6 +66,10 @@ CAMERA_DTB=apq8053-lenovo-cd-18781y-camera.dtb
 # CAMERA=1: contiguous memory for libcamera's dma-buf heap; the kernel's default 32 MB is too small for full-size
 # frames (2560x1600 fails to allocate, 128 MB streams it; driver/s5kc505a/README.md#libcamera)
 CAMERA_CMA=cma=128M
+# every image: at the end of the template's append line (before $CAMERA_CMA). The kernel passes it into the
+# environment of the postmarketOS initramfs, which then skips its 10 s wait for /dev/fb0: fb0 cannot appear there
+# (no modules in the initramfs), only later in Debian (docs/boot.md#kernel-command-line)
+NO_FB_WAIT=deviceinfo_no_framebuffer=true
 LOOP1=
 LOOP2=
 
@@ -374,6 +378,8 @@ sed -e "s/@BOOT_UUID@/$BOOT_UUID/; s/@ROOT_UUID@/$ROOT_UUID/" "$FS/boot/extlinux
 for f in vmlinuz initramfs apq8053-lenovo-cd-18781y.dtb dtbs/qcom/apq8053-lenovo-cd-18781y.dtb; do
     [ -s "$R/boot/$f" ] || { echo "missing /boot/$f in boot.tar" >&2; exit 1; }
 done
+[ "$(grep -c "^[[:space:]]*append .* $NO_FB_WAIT\$" "$R/boot/extlinux/extlinux.conf")" = 1 ] || \
+    { echo "extlinux.conf: the append line does not end with $NO_FB_WAIT (template changed?)" >&2; exit 1; }
 if [ "$CAMERA" = 1 ]; then
     # the camera DTB is the patched source of boot.tar's DTB: refuse a boot.tar whose DTB is not that source's
     want=$(awk -v f="$DTB" '$2 == f {print $1}' "$REPO/driver/s5kc505a/dtb.sha256")
@@ -389,7 +395,7 @@ if [ "$CAMERA" = 1 ]; then
        grep -q '^[[:space:]]*fdtdir' "$R/boot/extlinux/extlinux.conf"; then
         echo "extlinux.conf: could not replace fdtdir with fdt" >&2; exit 1
     fi
-    [ "$(grep -c "^[[:space:]]*append .* $CAMERA_CMA\$" "$R/boot/extlinux/extlinux.conf")" = 1 ] || \
+    [ "$(grep -c "^[[:space:]]*append .* $NO_FB_WAIT $CAMERA_CMA\$" "$R/boot/extlinux/extlinux.conf")" = 1 ] || \
         { echo "extlinux.conf: could not add $CAMERA_CMA to the append line" >&2; exit 1; }
 fi
 rm -rf "$R/usr/lib/modules/$KVER"; mkdir -p "$R/usr/lib/modules"

@@ -4,8 +4,9 @@
 # Checks on a finished image without the device (root, on the build machine):
 #   bash image/verify.sh <image> [sectors]        (run by build.sh before compressing)
 # Opens the image read-only through loop devices and checks: size, MBR, p1 features (lk2nd), UUIDs in extlinux.conf
-# and fstab, the TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile,
-# Python and the ALSA configuration (through qemu); the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
+# and fstab, deviceinfo_no_framebuffer=true on the kernel command line (no 10 s wait for fb0 in the initramfs), the
+# TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile, Python and the ALSA
+# configuration (through qemu); the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
 # EGL and GBM loaded through qemu) and the web layer when /etc/thinksmart-version says it is on. Front camera
 # (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, `cma=` on the command
 # line, the DTBs, the module, libcamera with its software ISP and libcamerasrc (loaded through qemu), no Debian Mesa
@@ -88,6 +89,12 @@ grep -q "pmos_root_uuid=$U2 " "$E" && ok "extlinux.conf: pmos_root_uuid = UUID o
 [ "$(grep -c '^label' "$E")" = 1 ] && ok "extlinux.conf: a single entry (lk2nd)" || no "extlinux.conf: several entries"
 grep -q "consoleblank=0 vt.global_cursor_default=0" "$E" && ok "extlinux.conf: consoleblank=0 vt.global_cursor_default=0" || no "extlinux.conf: console options"
 grep -q "quiet loglevel=0 systemd.show_status=0 " "$E" && ok "extlinux.conf: quiet loglevel=0 systemd.show_status=0 (no text on the screen while booting)" || no "extlinux.conf: loglevel/show_status"
+NO_FB_WAIT=deviceinfo_no_framebuffer=true   # as in build.sh: the initramfs skips its 10 s wait for /dev/fb0
+no_fb_wait() {  # exactly one deviceinfo_no_framebuffer=, =true, on the append line
+    [ "$(grep -Ec "^[[:space:]]*append .* $NO_FB_WAIT( |\$)" "$1")" = 1 ] && [ "$(grep -o ' deviceinfo_no_framebuffer=[^ ]*' "$1" | wc -l)" = 1 ]
+}
+no_fb_wait "$E" && ok "extlinux.conf: $NO_FB_WAIT once on the kernel command line (no 10 s wait for /dev/fb0)" \
+    || no "extlinux.conf: not exactly one deviceinfo_no_framebuffer=, expected $NO_FB_WAIT on the append line"
 grep -q "^UUID=${U2}[[:space:]]*/[[:space:]]" "$V/etc/fstab" && grep -q "^UUID=${U1}[[:space:]]*/boot[[:space:]]" "$V/etc/fstab" \
     && ok "fstab with the same UUIDs" || no "fstab"
 grep -q "^UUID=${U1}[[:space:]]*/boot[[:space:]].*nofail,x-systemd.device-timeout=90[[:space:]]" "$V/etc/fstab" \
@@ -205,6 +212,9 @@ if grep -Eq '^[[:space:]]*fdt[[:space:]]' "$E" || [ -e "$MD/extra/s5kc505a.ko" ]
     fi
     [ "$(grep -Ec "^[[:space:]]*append .* $CAMERA_CMA( |\$)" "$E")" = 1 ] && [ "$(grep -o ' cma=[^ ]*' "$E" | wc -l)" = 1 ] \
         && ok "extlinux.conf: $CAMERA_CMA on the kernel command line (libcamera at full size)" || no "extlinux.conf: not exactly one cma=, expected $CAMERA_CMA"
+    # build.sh appends cma= to the template's append line, which ends with NO_FB_WAIT (the kernel does not mind the order)
+    grep -Eq "^[[:space:]]*append .* $NO_FB_WAIT $CAMERA_CMA\$" "$E" && ok "extlinux.conf: append line ends with $NO_FB_WAIT $CAMERA_CMA" \
+        || no "extlinux.conf: append line does not end with $NO_FB_WAIT $CAMERA_CMA"
     if [ -n "$fdt" ] && [ -s "$V/boot/${fdt#/}" ]; then ok "/boot${fdt}: the DTB named by fdt exists"; else no "/boot${fdt}: missing (Linux would not boot)"; fi
     check "original DTB /boot/apq8053-lenovo-cd-18781y.dtb still present" test -s "$V/boot/apq8053-lenovo-cd-18781y.dtb"
     [ -n "$(pinned "$CAMERA_DTB")" ] || no "no pinned sums in $SUMS"
@@ -217,6 +227,8 @@ if grep -Eq '^[[:space:]]*fdt[[:space:]]' "$E" || [ -e "$MD/extra/s5kc505a.ko" ]
     if [ -e "$NC" ]; then
         [ "$(grep -c '^label' "$NC")" = 1 ] && grep -Eq '^[[:space:]]*fdtdir /$' "$NC" && ! grep -Eq '^[[:space:]]*fdt[[:space:]]' "$NC" && ! grep -q ' cma=' "$NC" \
             && ok "extlinux.conf.nocamera: one entry with fdtdir /, no cma= (to go back)" || no "extlinux.conf.nocamera"
+        no_fb_wait "$NC" && ok "extlinux.conf.nocamera: $NO_FB_WAIT once on the kernel command line" \
+            || no "extlinux.conf.nocamera: not exactly one deviceinfo_no_framebuffer=, expected $NO_FB_WAIT"
     fi
     vm=$(grep -ao 'vermagic=[^[:cntrl:]]*' "$MD/extra/s5kc505a.ko" 2>/dev/null)
     [ "$vm" = "vermagic=$KVER SMP preempt mod_unload aarch64" ] && ok "s5kc505a.ko: $vm" || no "s5kc505a.ko: vermagic '${vm#vermagic=}', expected $KVER"

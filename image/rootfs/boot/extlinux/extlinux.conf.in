@@ -6,4 +6,4 @@ label debian
 	kernel /vmlinuz
 	fdtdir /
 	initrd /initramfs
-	append quiet loglevel=0 systemd.show_status=0 consoleblank=0 vt.global_cursor_default=0 pmos_boot_uuid=@BOOT_UUID@ pmos_root_uuid=@ROOT_UUID@ pmos_rootfsopts=defaults
+	append quiet loglevel=0 systemd.show_status=0 consoleblank=0 vt.global_cursor_default=0 pmos_boot_uuid=@BOOT_UUID@ pmos_root_uuid=@ROOT_UUID@ pmos_rootfsopts=defaults deviceinfo_no_framebuffer=true
