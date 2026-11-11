@@ -118,13 +118,15 @@
   kernel, before any module or user space ran, and back to normal speed right after `qcom-camss` probed (~80 s). No
   interrupt storm, normal temperatures, no kernel errors. The cause is not known. Side effect: the `/boot` device came
   up after the 15 s `x-systemd.device-timeout` of fstab, so `/boot` was not mounted in that boot (`systemctl start
-  boot.mount` mounts it once the device is there).
+  boot.mount` mounts it once the device is there). Since v0.4-rc2 the timeout is 90 s (a device changed by hand
+  booted fine with it; edit `/etc/fstab` as in [image/README.md](../image/README.md#after-the-first-boot)).
 
 ## Not done yet
 
 - Faster boot (initramfs framebuffer wait).
 - Camera in the image: raw frames work with a patched DTB and an extra module, installed by hand
   ([driver/s5kc505a](../driver/s5kc505a/README.md)); a `CAMERA=1` image has not been flashed yet; libcamera 0.4
-  streams 1280×960 but full size fails on CMA (32 MB), no tuning. RPM reports the sensor's VDIG rail
+  streams full size (2560×1600, 2592×1944) only with `cma=128M` on the kernel command line (`CAMERA=1` adds it; the
+  default 32 MB CMA is enough for 1280×960), no tuning. RPM reports the sensor's VDIG rail
   (L2) at 1.200 V, the PMIC register at 1.175 V: not explained yet.
 - A newer kernel (the image is frozen on 7.1.3).

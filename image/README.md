@@ -128,8 +128,11 @@ libcamera userspace that was tried on a device (from Debian trixie main, without
 `gstreamer1.0-tools` for `gst-launch-1.0`; no Debian Mesa), and puts
 the camera DTB (`apq8053-lenovo-cd-18781y-camera.dtb`) in `/boot` **next to** the kernel package's DTB, which stays
 as it is. lk2nd reads one entry and `fdtdir` wins over `fdt`, so `extlinux.conf` gets
-`fdt /apq8053-lenovo-cd-18781y-camera.dtb` **instead of** `fdtdir /`; `/boot/extlinux/extlinux.conf.nocamera` is the
-same file with `fdtdir /`, to go back (`cp` it over `extlinux.conf` and reboot). `build.sh` accepts only the camera
+`fdt /apq8053-lenovo-cd-18781y-camera.dtb` **instead of** `fdtdir /`, and `cma=128M` at the end of its `append`
+line: 128 MB of contiguous memory instead of the kernel's default 32 MB, which libcamera needs for full-size frames
+(2560×1600 fails without it; the reservation does not change boot time or, in practice, free memory). A constant in
+`build.sh` (`CAMERA_CMA`), not a setting. `/boot/extlinux/extlinux.conf.nocamera` is the file a `CAMERA=0` image has
+(`fdtdir /`, no `cma=`), to go back (`cp` it over `extlinux.conf` and reboot). `build.sh` accepts only the camera
 DTB whose sha256 is in `driver/s5kc505a/dtb.sha256`, on top of a `boot.tar` whose DTB is the one it was patched from:
 the DTB is what lk2nd boots, and a DTB that does not boot needs someone at the device
 ([driver/s5kc505a](../driver/s5kc505a/README.md#installing)). With `CAMERA=0` the image is the same as without the
@@ -173,7 +176,7 @@ in_chroot systemctl enable my-app
 ## What `verify.sh` checks
 
 Size and MBR; p1 features (lk2nd); `e2fsck -fn` of both partitions; UUIDs in `extlinux.conf` and `fstab`; `/boot`
-with `nofail`; `dmsetup` and the device-mapper udev rules (`udevadm verify`); `systemd-gpt-auto-generator` disabled;
+with `nofail` and a 90 s device timeout; `dmsetup` and the device-mapper udev rules (`udevadm verify`); `systemd-gpt-auto-generator` disabled;
 no unit requires `local-fs.target` or `/boot`; a **test device-mapper on p1** run through `udevadm test --action=add`
 in a mount namespace with the image's rules and an empty `/run/udev` (it must get `/dev/disk/by-uuid/<p1>` and not
 `SYSTEMD_READY=0`); the image's own `systemd-fstab-generator` (through qemu); kernel, initramfs, DTBs; `modules.dep`
@@ -185,11 +188,11 @@ GL libraries through qemu. Web layer: on (WPE ≥ 2.54, bubblewrap, user namespa
 processes) or off (no WebKit or bubblewrap). AirPlay runtime: on (its packages, the GStreamer plugins UxPlay's
 pipelines use, `ldd` of libplist, `libdns_sd` and the plugins) or off (no GStreamer at all when the web layer is off
 too). Front camera (found from `extlinux.conf`, the module or the camera DTB): no `fdtdir`, exactly one `fdt` naming
-the camera DTB, that file in `/boot`, the original DTB still there, both DTBs as pinned in
-`driver/s5kc505a/dtb.sha256`, `extlinux.conf.nocamera`, the module's vermagic, `modules.dep` and `modules.alias`,
+the camera DTB, `cma=128M` once on the `append` line, that file in `/boot`, the original DTB still there, both DTBs as pinned in
+`driver/s5kc505a/dtb.sha256`, `extlinux.conf.nocamera` (with `fdtdir /` and no `cma=`), the module's vermagic, `modules.dep` and `modules.alias`,
 `v4l-utils`, the libcamera packages, `ipa_soft_simple.so` with its signature and `soft_ipa_proxy`, no Debian Mesa,
 `ldd` of libcamera, the IPA and the GStreamer plugin and `gst-inspect-1.0 libcamerasrc` through qemu; without it,
-`fdtdir /` (and no GStreamer when the web layer and the AirPlay runtime are off too).
+`fdtdir /`, no `cma=` (and no GStreamer when the web layer and the AirPlay runtime are off too).
 
 ## After the first boot
 
@@ -210,3 +213,9 @@ the camera DTB, that file in `/boot`, the original DTB still there, both DTBs as
   module and the camera DTB by hand as in [driver/s5kc505a](../driver/s5kc505a/README.md#installing) (that page also
   says how to go back), then `apt install --no-install-recommends v4l-utils` and the packages of `CAMERA_PACKAGES`
   in `build.sh` (libcamera).
+- From v0.4-rc1 to v0.4-rc2 without reflashing (both done by hand on a device): the longer `/boot` timeout, on every
+  device, then `systemctl daemon-reload`:
+  `sed -i 's/x-systemd.device-timeout=15/x-systemd.device-timeout=90/' /etc/fstab`. With the camera, `cma=128M` on
+  the kernel command line for libcamera at full size, then reboot (keep `extlinux.conf.nocamera` without it):
+  `grep -q ' cma=' /boot/extlinux/extlinux.conf || sed -i '/^[[:space:]]*append /s/$/ cma=128M/' /boot/extlinux/extlinux.conf`.
+  `cat /proc/cmdline` shows it after the reboot, `grep CmaTotal /proc/meminfo` says 131072 kB.

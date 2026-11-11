@@ -1,14 +1,16 @@
 # S5KC505A front camera (driver + device tree)
 
-**Status: raw frames work on the 7.1.3 kernel of this system** (one device, 2026-11-10): installed as below (module
-in `extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`), udev loads `i2c-qcom-cci`, `s5kc505a` and
-`qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene captured through CAMSS with
-`v4l2-ctl`, no errors in the kernel log. Boot time unchanged (24.2 s); one isolated slow boot is still unexplained
-([known-issues.md](../../docs/known-issues.md#camera)). libcamera 0.4 of Debian trixie streams 1280x960 with auto
-exposure ([below](#libcamera)); full size fails on CMA. The read-out is upside down, so the DT now says
-`rotation = <180>`; libcamera 0.4 reports it but does not turn the frame. The camera needs a patched DTB,
-so it is optional: `CAMERA=1` in `image/config.env` builds it into the image together with libcamera ([image/README.md](../../image/README.md#front-camera-optional);
-not flashed on a device yet), or install it by hand as below.
+**Status: raw frames work on the 7.1.3 kernel of this system** (one device, 2026-11-10): installed as below (module in
+`extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`; `cma=128M` since 2026-11-11), udev loads
+`i2c-qcom-cci`, `s5kc505a` and `qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene
+captured through CAMSS with `v4l2-ctl`, no errors in the kernel log. Boot time unchanged (24.2 s); one isolated slow
+boot is still unexplained ([known-issues.md](../../docs/known-issues.md#camera)). libcamera 0.4 of Debian trixie streams
+with auto exposure up to 2592x1944 with `cma=128M` on the kernel command line, 1280x960 without it
+([below](#libcamera)); raw frames also at the full 2608x1960. The read-out is upside down, so the DT now says
+`rotation = <180>`; libcamera 0.4 reports it but does not turn the frame. The camera needs a patched DTB, so it is optional:
+`CAMERA=1` in `image/config.env` builds it into the image together with libcamera
+([image/README.md](../../image/README.md#front-camera-optional); not flashed on a device yet), or install it by hand as
+below.
 
 The ThinkSmart View's front camera is a Samsung **S5KC505A** (5 Mpixel, RAW10 GRBG, 2 CSI-2 lanes at 480 MHz, 24 MHz
 MCLK) on the camera I²C controller (CCI) of the SoC. Two pieces are needed on top of the frozen 7.1.3 kernel:
@@ -21,6 +23,7 @@ MCLK) on the camera I²C controller (CCI) of the SoC. Two pieces are needed on t
 | `dtb.sha256` | sha256 of the kernel package's DTB (rebuilt from the unpatched source) and of the camera DTB: CI checks both builds against it, `image/build.sh` and `verify.sh` the files they install |
 | `make-test-bootimg.sh` | builds an Android boot image for a one-off `fastboot boot` from lk2nd with a different DTB, to try the device tree without writing to the device |
 | `raw10-to-png.py` | turns one raw frame into a PNG (standard library only, runs on the device) |
+| `lens-cover.py` | prints whether the lens cover is open or closed ([below](#lens-cover)) |
 
 The kernel's own `qcom-camss`, `i2c-qcom-cci`, `v4l2-cci`, `v4l2-fwnode` and `v4l2-async` modules are used as they
 are; only the DTB changes and one module is added.
@@ -117,13 +120,15 @@ untouched:
 cp -a /boot/extlinux/extlinux.conf /boot/extlinux/extlinux.conf.nocamera
 install -m 644 apq8053-lenovo-cd-18781y-camera.dtb /boot/
 sed -i 's|^\([[:space:]]*\)fdtdir /$|\1fdt /apq8053-lenovo-cd-18781y-camera.dtb|' /boot/extlinux/extlinux.conf
+grep -q ' cma=' /boot/extlinux/extlinux.conf || sed -i '/^[[:space:]]*append /s/$/ cma=128M/' /boot/extlinux/extlinux.conf
 install -m 644 s5kc505a.ko /usr/lib/modules/7.1.3-msm8953/extra/ && depmod -a 7.1.3-msm8953
 sync && systemctl reboot
 ```
 
-udev then loads the camera modules by itself (`i2c-qcom-cci`, `s5kc505a`, `qcom-camss`); the sensor's subdevice,
-`/dev/media*` and the `msm_vfe*_video*` nodes appear about 21 s after power-on. The live DT should have
-`rotation = <180>` (`/proc/device-tree/soc@0/cci@1b0c000/i2c-bus@0/camera@37/rotation`; a camera DTB built before
+`cma=128M` reserves contiguous memory for libcamera's full-size buffers ([below](#libcamera)); raw frames through
+`v4l2-ctl` do not need it. udev then loads the camera modules by itself (`i2c-qcom-cci`, `s5kc505a`, `qcom-camss`); the
+sensor's subdevice, `/dev/media*` and the `msm_vfe*_video*` nodes appear about 21 s after power-on. The live DT should
+have `rotation = <180>` (`/proc/device-tree/soc@0/cci@1b0c000/i2c-bus@0/camera@37/rotation`; a camera DTB built before
 the change has 0).
 
 Back: `cp /boot/extlinux/extlinux.conf.nocamera /boot/extlinux/extlinux.conf`, remove `extra/s5kc505a.ko`,
@@ -156,12 +161,31 @@ v4l2-ctl -d "$(media-ctl -d "$MD" -e msm_vfe0_video0)" --set-fmt-video=width=$W,
 python3 raw10-to-png.py /run/frame.raw $W $H /run/frame.png    # 652x490, turned 180°: upright on the stand
 ```
 
-A 1304x980 frame is 1,599,360 bytes (1632 bytes per line). The sensor subdevice has `exposure` (lines; in the
+A 1304x980 frame is 1,599,360 bytes (1632 bytes per line). **Full resolution** works the same way with
+`W=2608 H=1960`: a 6,397,440-byte frame (3264 bytes per line), which `raw10-to-png.py` turns into a 1304x980 PNG (it
+makes one RGB pixel of each 2x2 block). Raw capture uses no CMA (`v4l2-ctl` buffers are scatter-gather), so it needs
+no `cma=`. The sensor subdevice has `exposure` (lines; in the
 1304x980 mode the default is already 2000 and the maximum 2022 at 30 fps; longer needs a larger
 `vertical_blanking`), `analogue_gain` (32 = 1x … 511) and `vertical_blanking`. In a room in half-light
 `analogue_gain=256` (8x) at the default exposure gives a recognisable but dark image (mean green about 1 % of full
-scale): raise `vertical_blanking` for longer exposures (lower frame rate) or use the remaining gain up to 511. The lens cover is the switch `SW_CAMERA_LENS_COVER` of `gpio-keys`
-(GPIO 87): it does not cut the sensor's power, so check it before capturing.
+scale): raise `vertical_blanking` for longer exposures (lower frame rate) or use the remaining gain up to 511.
+
+### Lens cover
+
+The sliding cover is the switch `SW_CAMERA_LENS_COVER` (code 9) of `gpio-keys` (GPIO 87), the input device that also has
+Vol+. It does **not** cut the sensor's power, so software has to read it before capturing. `gpio-keys`
+was `/dev/input/event0` on the device tried, but find it rather than hard-code it: its
+`/sys/class/input/event*/device/capabilities/sw` is `210` (bit 9, and bit 4 `SW_MICROPHONE_INSERT`, presumably the
+microphone switch on GPIO 86 of [hardware.md](../../docs/hardware.md): not checked). The state comes from the `EVIOCGSW`
+ioctl, a bitmap with one bit per switch code; `lens-cover.py` does both and prints `open` or `closed` (as root):
+
+```sh
+python3 lens-cover.py          # open (exit 0) / closed (exit 1)
+```
+
+Bit 9 read 0 with the cover open; the closed state has **not been checked yet** (it needs someone at the device), so
+the script follows the kernel's meaning (1 = covered) until then. Changes also arrive as `EV_SW` events on the same
+device, for an application that wants to react instead of polling.
 
 ## libcamera
 
@@ -175,13 +199,18 @@ gst-launch-1.0 libcamerasrc ! video/x-raw,width=1280,height=960 ! videoconvert !
 ```
 
 The `simple` pipeline handler with the software ISP (`ipa_soft_simple`) picks up `qcom-camss`; dma-buf memory comes
-from `/dev/dma_heap/reserved` (CMA, 32 MB by default, root only). Auto exposure works (exposure 4-2022 lines, gain
-0-511), colours are plausible with a slight green cast; 1280x960 and 640x480 stream. Warnings: no static sensor
-properties, no `s5kc505a.yaml` tuning (falls back to `uncalibrated.yaml`), no camera sensor helper, no sensor delays.
+from `/dev/dma_heap/reserved` (CMA, root only). Auto exposure works (exposure 4-2022 lines, gain 0-511), colours are
+plausible with a slight green cast. With `cma=128M` on the kernel command line (`CAMERA=1` images have it; by hand:
+[Installing](#installing)) **2560x1600 (the default) and 2592x1944 stream** too: 60 buffers of 2560x1600 to an RGB
+file in 5.6 s, about 10.6 fps with the software ISP on the CPU; 1280x960 and 640x480 stream either way. Warnings:
+no static sensor properties, no `s5kc505a.yaml` tuning (falls back to `uncalibrated.yaml`), no camera sensor helper,
+no sensor delays.
 
-- **Full size (2560x1600, the default) fails**: `dma-heap allocation failure`, kernel `cma: ... alloc failed,
-  req-size: 3000 pages, ret: -16`. The 32 MB CMA is too small or too fragmented for full-size RGB buffers; a larger
-  `cma=` on the kernel command line is not tried. Ask for 1280x960.
+- **Without `cma=`** the kernel reserves 32 MB, and full size fails: `dma-heap allocation failure`, kernel `cma: ...
+  alloc failed, req-size: 3000 pages, ret: -16`; ask for 1280x960 then. With `cma=128M` the kernel logs `cma:
+  Reserved 128 MiB` (`CmaTotal: 131072 kB` in `/proc/meminfo`); boot time is unchanged and so, in practice, is
+  `MemAvailable`, since the kernel lends free CMA pages to movable allocations until a driver needs them. 64M and 96M
+  are not tried.
 - With `rotation = <180>` in the DT the frames of `libcamerasrc` 0.4 are still upside down (the sensor has no flip
   controls): add `videoflip method=rotate-180` after `videoconvert` (`gstreamer1.0-plugins-good`).
 - `CAMERA=1` installs the first line (15 packages, ~45 MB on the plain image), not the second: GStreamer's base and

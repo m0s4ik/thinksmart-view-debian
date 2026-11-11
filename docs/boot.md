@@ -22,7 +22,8 @@ The image is the whole `system` partition after repartitioning, with an MBR insi
 
 Kernel command line: the postmarketOS one plus `consoleblank=0 vt.global_cursor_default=0` (no blanking, no cursor)
 and `quiet loglevel=0 systemd.show_status=0` (no kernel text on the screen while booting; an application can show
-its own splash, see below).
+its own splash, see below). `CAMERA=1` adds `cma=128M`: 128 MB of contiguous memory instead of the default 32 MB, for
+libcamera's full-size buffers ([driver/s5kc505a](../driver/s5kc505a/README.md#libcamera)).
 
 ## System
 
@@ -78,8 +79,10 @@ Fixes in the image:
 - `image/rootfs/etc/udev/rules.d/54-dm-initramfs.rules` (before `55-dm.rules`): for a device-mapper udev has never
   seen during this boot, on `add` without a cookie, with a name, active and with a table, set
   `DM_UDEV_PRIMARY_SOURCE_FLAG=1`; the standard rules then do the rest;
-- `/boot` in fstab with `nofail,x-systemd.device-timeout=15`: if it does not appear, the system still reaches Wi-Fi
-  and ssh (`/boot` is only needed to change kernel or `extlinux.conf`);
+- `/boot` in fstab with `nofail,x-systemd.device-timeout=90`: if it does not appear, the system still reaches Wi-Fi
+  and ssh (`/boot` is only needed to change kernel or `extlinux.conf`); with `nofail` nothing waits for it, and the
+  timeout is 90 s rather than 15 s (before v0.4-rc2) because in one slow boot the device appeared later than 15 s and
+  `/boot` stayed unmounted ([known-issues.md](known-issues.md#camera));
 - `systemd-gpt-auto-generator` disabled: it follows the root up to `mmcblk0` (Android's GPT, dozens of partitions).
 
 None of our units requires `local-fs.target` or `/boot`; everything else is `Wants=`. `image/verify.sh` checks all of

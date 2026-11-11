@@ -55,7 +55,7 @@ optional layers off.</sub>
 | 🎞️ **Video decoder** | Venus hardware decoder (H.264, HEVC, VP8, VP9, MPEG-2/4) through V4L2, with a rebuilt `venus-core` module: 1080p30 H.264 with ~5% of one core |
 | 🌐 **Web (optional)** | WPE WebKit 2.54 on the GPU with its sandbox, for an application that shows web pages (`WEB=1`) |
 | 📡 **AirPlay runtime (optional)** | GStreamer plugins and libraries for an AirPlay receiver built on UxPlay, shipped by the application (`AIRPLAY=1`) |
-| 📷 **Front camera (optional)** | Samsung S5KC505A with jethac's driver and a patched DTB: raw RAW10 frames through V4L2, libcamera 0.4 at 1280×960 with auto exposure (`CAMERA=1`, or [by hand](driver/s5kc505a/README.md#installing)) |
+| 📷 **Front camera (optional)** | Samsung S5KC505A with jethac's driver and a patched DTB: raw RAW10 frames up to 2608×1960 through V4L2, libcamera 0.4 up to 2592×1944 with auto exposure (`CAMERA=1`, or [by hand](driver/s5kc505a/README.md#installing)) |
 | 🔊 **Speaker** | TAS5782M amplifier with the out-of-tree driver, hardware volume (`Speaker Amp Master`), 16-bit playback |
 | 🎙️ **Microphones** | two digital microphones, ready for wake word and speech recognition |
 | 📶 **Wi-Fi** | QCA9379 (ath10k), NetworkManager profile from the build config |
@@ -65,17 +65,16 @@ optional layers off.</sub>
 | 🚀 **Headless boot** | ready in ~25 s, survives without a keyboard (no emergency-mode dead ends) |
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
 
-Not yet: libcamera at full size (2560×1600 fails on the 32 MB CMA) and camera tuning. `poweroff` does not stay off
-with the power supply plugged in (use suspend, or `systemctl halt` before unplugging). See
-[known issues](docs/known-issues.md).
+Not yet: camera tuning. `poweroff` does not stay off with the power supply plugged in (use suspend, or `systemctl
+halt` before unplugging). See [known issues](docs/known-issues.md).
 
 ## What's new in v0.4
 
 > [!IMPORTANT]
-> **Release candidate.** v0.4-rc1 adds the front camera as an option. It works on a device installed by hand (same
-> module and DTB), and `CAMERA=1` images build and pass `verify.sh`, but a `CAMERA=1` image has **not been flashed
-> and booted on a device yet**. With `CAMERA=0` (the default) the image is the same as v0.3 (same packages and sizes
-> on test builds).
+> **Release candidate.** v0.4 adds the front camera as an option. It works on a device installed by hand (same
+> module, DTB and kernel command line), and `CAMERA=1` images build and pass `verify.sh`, but a `CAMERA=1` image has
+> **not been flashed and booted on a device yet**. With `CAMERA=0` (the default) the image is the same as v0.3 (same
+> packages and sizes on test builds) apart from the longer `/boot` timeout of rc2.
 
 - **Front camera** (Samsung S5KC505A): jethac's out-of-tree sensor driver, unchanged, and a device tree patch that
   turns on CAMSS and CCI, the camera rails and the sensor, with `rotation = <180>` (the read-out is upside down on the
@@ -86,7 +85,15 @@ with the power supply plugged in (use suspend, or `systemctl halt` before unplug
   `extlinux.conf` (the old file kept as `extlinux.conf.nocamera`), `v4l-utils` and libcamera 0.4 from Debian trixie;
   +20 packages and ~48 MB on the plain image, no Debian Mesa ([image/README.md](image/README.md#front-camera-optional)).
   `build.sh`, `verify.sh` and CI check both DTBs against `driver/s5kc505a/dtb.sha256`. *(rc1)*
-- Known: full size fails on CMA, no sensor tuning (slight green cast), `libcamerasrc` does not turn the frame, the lens
+- **libcamera at full size**: `CAMERA=1` adds `cma=128M` to the kernel command line (128 MB of contiguous memory
+  instead of 32 MB; boot time and free memory unchanged in practice), and 2560×1600 and 2592×1944 stream, about
+  10 fps with the software ISP. Raw frames at the full 2608×1960 work too
+  ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera)). *(rc2)*
+- **Lens cover**: `driver/s5kc505a/lens-cover.py` prints whether the cover is open or closed (the closed state is not
+  checked on a device yet; [driver/s5kc505a](driver/s5kc505a/README.md#lens-cover)). *(rc2)*
+- **`/boot` device timeout 90 s** instead of 15 s, on every image: in one slow boot the device came up after 15 s and
+  `/boot` was left unmounted ([docs/boot.md](docs/boot.md)). *(rc2)*
+- Known: no sensor tuning (slight green cast), `libcamerasrc` does not turn the frame, the lens
   cover switch does not cut the sensor's power ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera),
   [known issues](docs/known-issues.md#camera)).
 
@@ -145,7 +152,8 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] Faster boot (initramfs framebuffer wait)
 - [x] Front camera (S5KC505A): raw frames and libcamera 0.4 at 1280×960, optional (patched DTB)
 - [x] Camera in the image: `CAMERA=1` (v0.4-rc1; built and verified, not flashed on a device yet)
-- [ ] libcamera at full size (2560×1600 fails on the 32 MB CMA) and sensor tuning
+- [x] libcamera at full size (`cma=128M`, v0.4-rc2)
+- [ ] Camera sensor tuning
 - [ ] FT8201 panel variant
 
 ## Credits

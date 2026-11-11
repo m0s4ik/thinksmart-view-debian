@@ -40,7 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
-| `driver/s5kc505a/` | optional front camera: jethac's sensor driver (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`) and `fdt` in `extlinux.conf`: `CAMERA=1` in `config.env`, or by hand |
+| `driver/s5kc505a/` | optional front camera: jethac's sensor driver (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env`, or by hand |
 
 ## Commands and the checks that must pass
 
@@ -86,8 +86,9 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   there is no watchdog, so a hang needs someone at the device. Never put `fdt` next to `fdtdir` (fdtdir wins) and never
   name a DTB that is not in `/boot` (no boot); `build.sh` refuses a camera DTB other than the one in
   `driver/s5kc505a/dtb.sha256`: rebuild it; the sum changes only together with the patch. The DT says `rotation = <180>`
-  (the read-out is upside down on the stand; the sensor cannot flip). libcamera's default 2560x1600 fails on the 32 MB
-  CMA: ask for 1280x960.
+  (the read-out is upside down on the stand; the sensor cannot flip). libcamera's default 2560x1600 needs `cma=128M` on
+  the kernel command line (`CAMERA=1` adds it; a hand install must add it too): with the default 32 MB CMA ask for
+  1280x960.
 - More in [docs/known-issues.md](docs/known-issues.md).
 
 ## Before committing
