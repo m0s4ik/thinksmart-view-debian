@@ -7,8 +7,9 @@
 # and fstab, the TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile,
 # Python and the ALSA configuration (through qemu); the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
 # EGL and GBM loaded through qemu) and the web layer when /etc/thinksmart-version says it is on. Front camera
-# (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, the DTBs, the module,
-# libcamera with its software ISP and libcamerasrc (loaded through qemu), no Debian Mesa pulled by them.
+# (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, `cma=` on the command
+# line, the DTBs, the module, libcamera with its software ISP and libcamerasrc (loaded through qemu), no Debian Mesa
+# pulled by them.
 # Headless boot: dmsetup and the device-mapper udev rules, /boot nofail (fstab generator of the image), and a test
 # device-mapper on p1 (read-only, removed at the end) run through `udevadm test` with the rules of the image and an
 # empty udev database, as after switch_root from the postmarketOS initramfs.
@@ -187,6 +188,7 @@ check "softvol speaker in /etc/asound.conf" grep -q 'Master Playback Volume' "$V
 
 echo "-- front camera"
 CAMERA_DTB=apq8053-lenovo-cd-18781y-camera.dtb
+CAMERA_CMA=cma=128M     # as in build.sh: libcamera's full-size buffers do not fit in the default 32 MB
 pinned() { awk -v f="$1" '$2 == f {print $1}' "$SUMS" 2>/dev/null; }
 sha() { sha256sum < "$1" | cut -d' ' -f1; }
 if grep -Eq '^[[:space:]]*fdt[[:space:]]' "$E" || [ -e "$MD/extra/s5kc505a.ko" ] || [ -e "$V/boot/$CAMERA_DTB" ]; then
@@ -201,6 +203,8 @@ if grep -Eq '^[[:space:]]*fdt[[:space:]]' "$E" || [ -e "$MD/extra/s5kc505a.ko" ]
     else
         ok "extlinux.conf: fdt $fdt"
     fi
+    [ "$(grep -Ec "^[[:space:]]*append .* $CAMERA_CMA( |\$)" "$E")" = 1 ] && [ "$(grep -o ' cma=[^ ]*' "$E" | wc -l)" = 1 ] \
+        && ok "extlinux.conf: $CAMERA_CMA on the kernel command line (libcamera at full size)" || no "extlinux.conf: not exactly one cma=, expected $CAMERA_CMA"
     if [ -n "$fdt" ] && [ -s "$V/boot/${fdt#/}" ]; then ok "/boot${fdt}: the DTB named by fdt exists"; else no "/boot${fdt}: missing (Linux would not boot)"; fi
     check "original DTB /boot/apq8053-lenovo-cd-18781y.dtb still present" test -s "$V/boot/apq8053-lenovo-cd-18781y.dtb"
     [ -n "$(pinned "$CAMERA_DTB")" ] || no "no pinned sums in $SUMS"
@@ -211,8 +215,8 @@ if grep -Eq '^[[:space:]]*fdt[[:space:]]' "$E" || [ -e "$MD/extra/s5kc505a.ko" ]
     grep -aq 'samsung,s5kc505a' "$V/boot/$CAMERA_DTB" 2>/dev/null && ok "camera DTB: samsung,s5kc505a node" || no "camera DTB without samsung,s5kc505a"
     NC=$V/boot/extlinux/extlinux.conf.nocamera
     if [ -e "$NC" ]; then
-        [ "$(grep -c '^label' "$NC")" = 1 ] && grep -Eq '^[[:space:]]*fdtdir /$' "$NC" && ! grep -Eq '^[[:space:]]*fdt[[:space:]]' "$NC" \
-            && ok "extlinux.conf.nocamera: one entry with fdtdir / (to go back)" || no "extlinux.conf.nocamera"
+        [ "$(grep -c '^label' "$NC")" = 1 ] && grep -Eq '^[[:space:]]*fdtdir /$' "$NC" && ! grep -Eq '^[[:space:]]*fdt[[:space:]]' "$NC" && ! grep -q ' cma=' "$NC" \
+            && ok "extlinux.conf.nocamera: one entry with fdtdir /, no cma= (to go back)" || no "extlinux.conf.nocamera"
     fi
     vm=$(grep -ao 'vermagic=[^[:cntrl:]]*' "$MD/extra/s5kc505a.ko" 2>/dev/null)
     [ "$vm" = "vermagic=$KVER SMP preempt mod_unload aarch64" ] && ok "s5kc505a.ko: $vm" || no "s5kc505a.ko: vermagic '${vm#vermagic=}', expected $KVER"
@@ -233,6 +237,7 @@ else
     CAMERA=0
     grep -Eq '^[[:space:]]*fdtdir /$' "$E" && ok "camera off: extlinux.conf with fdtdir / (the kernel package's DTB)" \
         || no "extlinux.conf without fdtdir / and without fdt"
+    ! grep -q ' cma=' "$E" && ok "camera off: no cma= on the kernel command line" || no "camera off but cma= in extlinux.conf"
 fi
 
 echo "-- GPU: reduced Mesa"

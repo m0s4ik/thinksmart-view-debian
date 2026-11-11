@@ -63,6 +63,9 @@ P2_START=499712
 TODAY=$(date +%Y%m%d)
 DTB=apq8053-lenovo-cd-18781y.dtb
 CAMERA_DTB=apq8053-lenovo-cd-18781y-camera.dtb
+# CAMERA=1: contiguous memory for libcamera's dma-buf heap; the kernel's default 32 MB is too small for full-size
+# frames (2560x1600 fails to allocate, 128 MB streams it; driver/s5kc505a/README.md#libcamera)
+CAMERA_CMA=cma=128M
 LOOP1=
 LOOP2=
 
@@ -378,12 +381,16 @@ if [ "$CAMERA" = 1 ]; then
         { echo "/boot/$DTB of boot.tar is not the one the camera DTB was made from (driver/s5kc505a/dtb.sha256)" >&2; exit 1; }
     # next to the original, which stays as it is; lk2nd loads the file named by `fdt` (fdtdir would win over it)
     install -m 0644 "$P/$CAMERA_DTB" "$R/boot/$CAMERA_DTB"
+    # extlinux.conf.nocamera: the file as a CAMERA=0 image has it (fdtdir, no cma=), to go back to the old DTB
     cp -p "$R/boot/extlinux/extlinux.conf" "$R/boot/extlinux/extlinux.conf.nocamera"
-    sed -i "s|^\([[:space:]]*\)fdtdir /\$|\1fdt /$CAMERA_DTB|" "$R/boot/extlinux/extlinux.conf"
+    sed -i -e "s|^\([[:space:]]*\)fdtdir /\$|\1fdt /$CAMERA_DTB|" \
+        -e "s|^\([[:space:]]*append .*\)\$|\1 $CAMERA_CMA|" "$R/boot/extlinux/extlinux.conf"
     if ! grep -q "^[[:space:]]*fdt /$CAMERA_DTB\$" "$R/boot/extlinux/extlinux.conf" || \
        grep -q '^[[:space:]]*fdtdir' "$R/boot/extlinux/extlinux.conf"; then
         echo "extlinux.conf: could not replace fdtdir with fdt" >&2; exit 1
     fi
+    [ "$(grep -c "^[[:space:]]*append .* $CAMERA_CMA\$" "$R/boot/extlinux/extlinux.conf")" = 1 ] || \
+        { echo "extlinux.conf: could not add $CAMERA_CMA to the append line" >&2; exit 1; }
 fi
 rm -rf "$R/usr/lib/modules/$KVER"; mkdir -p "$R/usr/lib/modules"
 tar -xf "$P/modules-$KVER.tar" -C "$R/usr/lib/modules" --no-same-owner
@@ -453,7 +460,7 @@ AirPlay runtime: $([ "$AIRPLAY" = 1 ] && in_chroot dpkg-query -W -f='GStreamer $
 ${EXTRA:-customization: none}
 UUID: boot $BOOT_UUID  root $ROOT_UUID
 EOF
-[ "$CAMERA" = 0 ] || echo "camera: s5kc505a, fdt /$CAMERA_DTB (extlinux.conf.nocamera: without it), libcamera $(in_chroot dpkg-query -W -f='${Version}' libcamera0.4)" >> "$R/etc/thinksmart-version"
+[ "$CAMERA" = 0 ] || echo "camera: s5kc505a, fdt /$CAMERA_DTB and $CAMERA_CMA (extlinux.conf.nocamera: without them), libcamera $(in_chroot dpkg-query -W -f='${Version}' libcamera0.4)" >> "$R/etc/thinksmart-version"
 rm -f "$R/usr/sbin/policy-rc.d" "$R/etc/resolv.conf"
 rm -rf "$R"/var/lib/apt/lists/* "$R"/var/cache/apt/*.bin "$R"/var/cache/apt/archives/*.deb
 find "$R/var/log" -type f -exec truncate -s 0 {} +
