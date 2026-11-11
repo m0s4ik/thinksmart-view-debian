@@ -25,6 +25,14 @@
   link silently broken if it fired on a new association, so it is **not used**. If drops on key renewal ever show up
   (`failed to install key` followed by `deauthenticating` with no roam), a patch limited to the group key and to
   -ETIMEDOUT can be built with the clang recipe of the TAS5782M driver.
+- **Fast roaming (802.11r, FT-PSK): associated but no traffic**: reported in
+  [issue #2](https://github.com/m0s4ik/thinksmart-view-debian/issues/2), not reproduced on our device. During an FT
+  transition between two access points ath10k logs `failed to install key ... -110`, `failed to remove key ... from
+  hardware (-110)` and `Got RX ind from invalid peer`; the reassociation succeeds and wpa_supplicant reports
+  `COMPLETED`, but no IP traffic passes until the connection is brought up again (`nmcli connection up <name>`). The
+  timeout comes from the QCA9379 firmware not answering the key removal in time, so a real fix belongs upstream in
+  ath10k. Workarounds for a device that stays on a desk: use the network without FT (plain WPA-PSK), so that a
+  transition is a normal reconnection, or reconnect when the interface is associated but the gateway does not answer.
 
 ## Boot
 
