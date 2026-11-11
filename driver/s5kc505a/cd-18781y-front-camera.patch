@@ -97,12 +97,12 @@
 +
 +		orientation = <0>;	/* front */
 +		/*
-+		 * The read-out is upright with the device on its stand
++		 * The read-out is upside down with the device on its stand
 +		 * (landscape). Lenovo's qcom,mount-angle 270 is relative to the
 +		 * panel's native portrait orientation, not to the scene as in
 +		 * video-interface-devices.yaml.
 +		 */
-+		rotation = <0>;
++		rotation = <180>;
 +
 +		port {
 +			front_cam_ep: endpoint {
