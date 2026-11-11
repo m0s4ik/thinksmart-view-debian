@@ -4,7 +4,9 @@
 in `extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`), udev loads `i2c-qcom-cci`, `s5kc505a` and
 `qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene captured through CAMSS with
 `v4l2-ctl`, no errors in the kernel log. Boot time unchanged (24.2 s); one isolated slow boot is still unexplained
-([known-issues.md](../../docs/known-issues.md#camera)). libcamera has not been tried. The camera needs a patched DTB,
+([known-issues.md](../../docs/known-issues.md#camera)). libcamera 0.4 of Debian trixie streams 1280x960 with auto
+exposure ([below](#libcamera)); full size fails on CMA. The read-out is upside down, so the DT now says
+`rotation = <180>` (every frame so far was taken with 0): that DTB has not been booted on a device yet. The camera needs a patched DTB,
 so it is optional: `CAMERA=1` in `image/config.env` builds it into the image ([image/README.md](../../image/README.md#front-camera-optional);
 not flashed on a device yet), or install it by hand as below.
 
@@ -40,7 +42,7 @@ image, `qcom,board-id = <0x1010520 0>` like this device), and checked against je
 | Standby | GPIO 39, active low | `gpios[2]` = 39 "CAM_STANDBY0" |
 | Bus | CCI master 0, 7-bit address 0x37 | `qcom,cci-master = <0>`; 8-bit 0x6e in the Lenovo sensor library (rickx, jethac); jethac read chip ID 0x5034 there |
 | CSI | CSIPHY 0 / CSID 0, 2 data lanes | `qcom,csiphy-sd-index`, `qcom,csid-sd-index` = 0 |
-| Mount | front; DT `rotation = <0>` (see below) | `qcom,sensor-position = <1>`, `qcom,mount-angle = <270>` |
+| Mount | front; DT `rotation = <180>` (see below) | `qcom,sensor-position = <1>`, `qcom,mount-angle = <270>` |
 
 Notes:
 
@@ -50,11 +52,13 @@ Notes:
   the driver powers it. The Lenovo DTB has no other consumer of L2.
 - The Lenovo DTB's pin state `cam_sensor_rear_vdig` configures GPIO 134, not 118: it is left over from Qualcomm's
   reference board; the line the Lenovo driver drives is the `gpios` entry, GPIO 118.
-- **Rotation.** `video-interface-devices.yaml` defines `rotation` between the sensor's read-out and the scene, and the
-  read-out is upright with the device on its stand (landscape, as it is used): so the patch sets `rotation = <0>`.
-  Lenovo's `qcom,mount-angle = <270>` is relative to the panel's native portrait orientation (800x1280), an Android
-  convention; with 270 in the DT, libcamera and the applications that follow it would turn an upright image on its
-  side. jethac's DT patch has 270.
+- **Rotation.** `video-interface-devices.yaml` defines `rotation` between the sensor's read-out and the scene. With
+  the device on its stand (landscape, as it is used) the read-out is **upside down**: raw frames (`media-ctl` and
+  `v4l2-ctl`) and libcamera frames alike. So the patch sets `rotation = <180>`. Lenovo's `qcom,mount-angle = <270>` is
+  relative to the panel's native portrait orientation (800x1280), an Android convention, and jethac's DT patch has
+  270 too: wrong for landscape. An earlier version of this patch had 0, judged on a dim frame: also wrong. The driver
+  has no `hflip`/`vflip` controls, so nothing is turned in the sensor: consumers turn the image by the rotation
+  property (`camera_sensor_rotation` on the subdevice, libcamera's `Rotation`).
 - Measured on the device: RPM reports L2 at 1.200 V, the PMIC's own register (read through the SPMI regulator
   driver) at **1.175 V**. Lower than requested, so on the safe side; why they differ is not known yet.
 - Power-up order in the driver (from the Lenovo library): reset and standby low, VANA, VDIG, VIO, MCLK, reset high,
@@ -119,7 +123,8 @@ sync && systemctl reboot
 
 udev then loads the camera modules by itself (`i2c-qcom-cci`, `s5kc505a`, `qcom-camss`); the sensor's subdevice,
 `/dev/media*` and the `msm_vfe*_video*` nodes appear about 21 s after power-on. The live DT should have
-`rotation = <0>` (`/proc/device-tree/soc@0/cci@1b0c000/i2c-bus@0/camera@37/rotation`).
+`rotation = <180>` (`/proc/device-tree/soc@0/cci@1b0c000/i2c-bus@0/camera@37/rotation`; a camera DTB built before
+the change has 0).
 
 Back: `cp /boot/extlinux/extlinux.conf.nocamera /boot/extlinux/extlinux.conf`, remove `extra/s5kc505a.ko`,
 `depmod -a`, reboot. If Linux does not come up, boot `boot-current.img` with `fastboot boot` and do the same.
@@ -148,7 +153,7 @@ media-ctl -d "$MD" -V "\"$SENSOR\":0[fmt:$F/${W}x$H],\"msm_csiphy0\":0[fmt:$F/${
 v4l2-ctl -d "$(media-ctl -d "$MD" -e "$SENSOR")" -c test_pattern=2          # colour bars; 0 = the real image
 v4l2-ctl -d "$(media-ctl -d "$MD" -e msm_vfe0_video0)" --set-fmt-video=width=$W,height=$H,pixelformat=pgAA \
 	--stream-mmap --stream-skip=4 --stream-count=1 --stream-to=/run/frame.raw
-python3 raw10-to-png.py /run/frame.raw $W $H /run/frame.png    # 652x490, upright with the device on its stand
+python3 raw10-to-png.py /run/frame.raw $W $H /run/frame.png    # 652x490, turned 180°: upright on the stand
 ```
 
 A 1304x980 frame is 1,599,360 bytes (1632 bytes per line). The sensor subdevice has `exposure` (lines; in the
@@ -158,10 +163,27 @@ A 1304x980 frame is 1,599,360 bytes (1632 bytes per line). The sensor subdevice 
 scale): raise `vertical_blanking` for longer exposures (lower frame rate) or use the remaining gain up to 511. The lens cover is the switch `SW_CAMERA_LENS_COVER` of `gpio-keys`
 (GPIO 87): it does not cut the sensor's power, so check it before capturing.
 
-libcamera (simple pipeline handler with the software ISP) knows `qcom-camss`: Debian trixie-backports has 0.7.1
-(`apt install -t trixie-backports libcamera0.7 libcamera-ipa gstreamer1.0-libcamera`, no Debian Mesa pulled in).
-It finds dma-buf memory in `/dev/dma_heap/reserved` (CMA, 32 MB by default, root only) or `/dev/udmabuf`. It has
-no sensor properties or tuning for the S5KC505A (warnings, uncalibrated colours) and does not rotate.
+## libcamera
+
+Debian trixie's own **0.4.0** works (one device, 2026-11-11; trixie-backports' 0.7.1 not tried):
+
+```sh
+apt install --no-install-recommends libcamera0.4 libcamera-ipa gstreamer1.0-libcamera gstreamer1.0-tools   # no Debian Mesa
+gst-launch-1.0 libcamerasrc ! video/x-raw,width=1280,height=960 ! videoconvert ! video/x-raw,format=RGB ! \
+	multifilesink location=/run/lc.raw max-files=1 next-file=buffer      # as root; 3,686,400-byte RGB frames
+```
+
+The `simple` pipeline handler with the software ISP (`ipa_soft_simple`) picks up `qcom-camss`; dma-buf memory comes
+from `/dev/dma_heap/reserved` (CMA, 32 MB by default, root only). Auto exposure works (exposure 4-2022 lines, gain
+0-511), colours are plausible with a slight green cast; 1280x960 and 640x480 stream. Warnings: no static sensor
+properties, no `s5kc505a.yaml` tuning (falls back to `uncalibrated.yaml`), no camera sensor helper, no sensor delays.
+
+- **Full size (2560x1600, the default) fails**: `dma-heap allocation failure`, kernel `cma: ... alloc failed,
+  req-size: 3000 pages, ret: -16`. The 32 MB CMA is too small or too fragmented for full-size RGB buffers; a larger
+  `cma=` on the kernel command line is not tried. Ask for 1280x960.
+- The frames were upside down (taken with a DT that said `rotation = <0>`); whether `libcamerasrc` turns them with
+  `rotation = <180>` is not checked yet.
+- `CAMERA=1` does not install libcamera: it stays optional, with the line above.
 
 ## Credits and licence
 
@@ -170,7 +192,7 @@ commit `fe9c0a58`, `kernel/patches/0402-media-i2c-add-samsung-s5kc505a-sensor-dr
 Chan), unchanged: `s5kc505a.c` is the file those two patches create (sha256 `d044ecca…07946fe25`). It is
 **GPL-2.0-only** like the other drivers here (header `SPDX-License-Identifier: GPL-2.0`); the binding
 (`0401`) is `GPL-2.0-only OR BSD-2-Clause`. The device tree patch follows jethac's `0403`, rewritten for the 7.1.3
-source (the original does not apply to it) and with `rotation = <0>` instead of 270; the device tree source itself is BSD-3-Clause. Register tables, I²C
+source (the original does not apply to it) and with `rotation = <180>` instead of 270; the device tree source itself is BSD-3-Clause. Register tables, I²C
 address and power sequence were decoded by jethac and rickx
 ([rickx/ubuntu-thinksmart research/camera](https://github.com/rickx/ubuntu-thinksmart/tree/main/research/camera))
 from Lenovo's sensor library.

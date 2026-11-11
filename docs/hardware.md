@@ -17,7 +17,7 @@ What we found on our unit (Himax panel variant) with the postmarketOS kernel 7.1
 | Keys | Vol+ = `gpio-keys` (`event0`, `KEY_VOLUMEUP`), Vol− = `pm8941_resin` (`event1`, `KEY_VOLUMEDOWN`). **No power button**. The kernel does not autorepeat them | ok; both wake the device from suspend |
 | Camera shutter / mic switch | camera lens cover on GPIO 87 (`SW_CAMERA_LENS_COVER`, reported by `gpio-keys`), microphone switch on GPIO 86 (switch code 4; not on every unit) | readable with `EVIOCGSW` |
 | Light / proximity sensor | **Vishay VCNL4200** at 0x51 on the sensor I²C bus (`i2c-sensors`, with the accelerometer); upstream driver `vcnl4000`, IIO device named `vcnl4000`, `in_illuminance_raw` × `in_illuminance_scale` = lux | **light ok** with the out-of-tree module ([driver/vcnl4000](../driver/vcnl4000/README.md), optional part) declared at boot by `thinksmart-light.service` (no node in the postmarketOS device tree). **proximity ok** at short range (a hand within ~30 cm) with the settings applied by the same service |
-| Camera | **Samsung S5KC505A** (5 MP, 2608×1960, RAW10 GRBG, 2 MIPI lanes at 480 MHz, CCI address 0x37, chip ID 0x5034 at register 0x0000, fixed focus; Lenovo's `mount-angle` 270 is relative to the portrait panel, the read-out is upright with the device on its stand). Lenovo's camera config also lists OV5693 and S5K4E8 as alternative modules | **raw frames ok, optional**: needs a patched DTB and jethac's sensor driver ([driver/s5kc505a](../driver/s5kc505a/README.md)); the kernel's own `qcom-camss` and `i2c-qcom-cci` do the rest. RAW10 through CAMSS with `v4l2-ctl` tried on 7.1.3; libcamera not tried |
+| Camera | **Samsung S5KC505A** (5 MP, 2608×1960, RAW10 GRBG, 2 MIPI lanes at 480 MHz, CCI address 0x37, chip ID 0x5034 at register 0x0000, fixed focus; Lenovo's `mount-angle` 270 is relative to the portrait panel, the read-out is upside down with the device on its stand: DT `rotation` 180). Lenovo's camera config also lists OV5693 and S5K4E8 as alternative modules | **raw frames ok, optional**: needs a patched DTB and jethac's sensor driver ([driver/s5kc505a](../driver/s5kc505a/README.md)); the kernel's own `qcom-camss` and `i2c-qcom-cci` do the rest. RAW10 through CAMSS with `v4l2-ctl` tried on 7.1.3; libcamera 0.4 (trixie) streams 1280×960, full size fails on CMA |
 | Video decoder | **Venus** (`qcom-venus`, firmware VIDEO.VE.4.2 from the `modem` partition), V4L2 `qcom-venus-decoder` / `qcom-venus-encoder` | **ok** with the rebuilt `venus-core` ([driver/venus](../driver/venus/README.md), optional part; the kernel package's one fails with -5): H.264, HEVC, VP8, VP9, MPEG-2/4 → NV12. 1080p30 H.264 at ~8× real time with ~0.5 s of CPU per 10 s of video. Draining at end of file hangs with B-frames (live streams unaffected); AirPlay screen mirroring from an iPhone decoded on it with low latency |
 | USB-C | data only | no USB gadget (no network over USB) and no host mode with this kernel |
 | "Headset Jack" input | reported by the sound card | not a real jack (there is none on the device): ignore it |
@@ -37,12 +37,15 @@ memory) with `media-ctl`/`v4l2-ctl`, no errors in the kernel log. Everything is 
 - **Device tree**: no overlays (the live DT has no `__symbols__`, and lk2nd loads a full DTB), so the DTS of
   msm8953-mainline 7.1.3 is patched and rebuilt: `camss` and `cci` enabled, two fixed regulators (VANA L17 2.85 V via
   GPIO 119, VDIG L2 **1.2 V** via GPIO 118, L2 pinned at 1.2 V), the sensor at 0x37 with MCLK0 24 MHz, reset GPIO 40,
-  powerdown GPIO 39, VIO L6, `rotation = <0>`. Every value comes from the Lenovo DTB (table in the driver's README):
+  powerdown GPIO 39, VIO L6, `rotation = <180>`. Every value comes from the Lenovo DTB (table in the driver's README):
   a wrong VDIG can damage the sensor. The unpatched source rebuilds the device's DTB byte for byte, and the patch
   changes nothing else. Because of this patched DTB the camera is **optional**: `CAMERA=1` in the build config.
-- **Open**: RPM reports L2 at 1.200 V, the PMIC register at 1.175 V; libcamera (simple pipeline handler with the
-  Software ISP, 0.7.1 in trixie-backports) not tried; no sensor tuning, so colours from a raw frame are only a quick
-  grey-world guess. One slow boot (85 s) seen once after the first camera session, not reproduced
+- **libcamera**: trixie's 0.4.0 (simple pipeline handler, software ISP) streams 1280×960 and 640×480 through
+  `libcamerasrc` with auto exposure; the default 2560×1600 fails to allocate from the 32 MB CMA
+  ([driver README](../driver/s5kc505a/README.md#libcamera)).
+- **Open**: RPM reports L2 at 1.200 V, the PMIC register at 1.175 V; the `rotation = <180>` DTB not booted yet (every
+  frame so far was taken with 0, upside down); no sensor tuning, so colours are only a guess (raw: grey world;
+  libcamera: `uncalibrated.yaml`, slight green cast). One slow boot (85 s) seen once after the first camera session, not reproduced
   ([known-issues.md](known-issues.md#camera)).
 - Realistic uses: presence detection at 1304×980 binned, snapshots on request; the lens cover (GPIO 87) does not cut
   the sensor's power, so software has to check it.

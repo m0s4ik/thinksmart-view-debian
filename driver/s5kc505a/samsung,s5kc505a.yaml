@@ -98,7 +98,7 @@ examples:
               vddd-supply = <&vreg_1p2>;
               vddio-supply = <&vreg_1p8>;
               orientation = <0>;
-              rotation = <270>;
+              rotation = <180>;
 
               port {
                   endpoint {

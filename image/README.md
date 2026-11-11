@@ -130,7 +130,8 @@ same file with `fdtdir /`, to go back (`cp` it over `extlinux.conf` and reboot).
 DTB whose sha256 is in `driver/s5kc505a/dtb.sha256`, on top of a `boot.tar` whose DTB is the one it was patched from:
 the DTB is what lk2nd boots, and a DTB that does not boot needs someone at the device
 ([driver/s5kc505a](../driver/s5kc505a/README.md#installing)). With `CAMERA=0` the image is the same as without the
-option.
+option. libcamera is not part of it: one `apt install` on the device
+([driver/s5kc505a](../driver/s5kc505a/README.md#libcamera)).
 
 ## Customization
 

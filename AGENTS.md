@@ -85,7 +85,9 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   copy of `extlinux.conf`, and ask before rebooting into it (or flashing a `CAMERA=1` image). `kernel.panic` is 0 and
   there is no watchdog, so a hang needs someone at the device. Never put `fdt` next to `fdtdir` (fdtdir wins) and never
   name a DTB that is not in `/boot` (no boot); `build.sh` refuses a camera DTB other than the one in
-  `driver/s5kc505a/dtb.sha256`: rebuild it; the sum changes only together with the patch.
+  `driver/s5kc505a/dtb.sha256`: rebuild it; the sum changes only together with the patch. The DT says `rotation = <180>`
+  (the read-out is upside down on the stand; the sensor cannot flip). libcamera's default 2560x1600 fails on the 32 MB
+  CMA: ask for 1280x960.
 - More in [docs/known-issues.md](docs/known-issues.md).
 
 ## Before committing
