@@ -10,8 +10,9 @@ with auto exposure up to 2592x1944 with `cma=128M` on the kernel command line, 1
 ([below](#libcamera)); raw frames also at the full 2608x1960. The read-out is upside down, so the DT now says
 `rotation = <180>`; libcamera 0.4 reports it but does not turn the frame. The camera needs a patched DTB, so it is optional:
 `CAMERA=1` in `image/config.env` builds it into the image together with libcamera
-([image/README.md](../../image/README.md#front-camera-optional); not flashed on a device yet), or install it by hand as
-below.
+([image/README.md](../../image/README.md#front-camera-optional); such an image flashed and booted on one device,
+2026-11-11: camera DTB and `cma=128M` in use, chip ID at 10.5 s, a raw 1304x980 frame, libcamera at 2560x1600, boot
+13.1 s), or install it by hand as below.
 
 The ThinkSmart View's front camera is a Samsung **S5KC505A** (5 Mpixel, RAW10 GRBG, 2 CSI-2 lanes at 480 MHz, 24 MHz
 MCLK) on the camera I²C controller (CCI) of the SoC. Two pieces are needed on top of the frozen 7.1.3 kernel:

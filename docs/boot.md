@@ -45,7 +45,8 @@ A broken `append` line (a lost UUID, a cut line) means the initramfs does not fi
 ## Boot time
 
 `systemd-analyze` on a device: `Startup finished in 6.004s (kernel) + 7.836s (userspace) = 13.840s` with
-`deviceinfo_no_framebuffer=true`; `16.396s + 7.813s = 24.210s` before it (v0.4-rc1 and earlier; "kernel" includes
+`deviceinfo_no_framebuffer=true` (a freshly flashed `CAMERA=1` image of v0.4-rc2: `5.979s + 7.111s = 13.091s`, 13.2 s
+on the next boot); `16.396s + 7.813s = 24.210s` before it (v0.4-rc1 and earlier; "kernel" includes
 the initramfs). Where the time of a boot before the change went, from the kernel's timestamps:
 
 | In order | Time |

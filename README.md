@@ -72,14 +72,14 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
 ## What's new in v0.4
 
 > [!IMPORTANT]
-> **Release candidate.** v0.4 adds the front camera as an option. It works on a device installed by hand (same
-> module, DTB and kernel command line), and `CAMERA=1` images build and pass `verify.sh`, but a `CAMERA=1` image has
-> **not been flashed and booted on a device yet**. With `CAMERA=0` (the default) the image is the same as v0.3 (same
-> packages and sizes on test builds) apart from the faster boot and the longer `/boot` timeout of rc2.
+> **Release candidate.** v0.4 adds the front camera as an option. A `CAMERA=1` image (`WEB=1 AIRPLAY=1 CAMERA=1`) has
+> been flashed and booted on one device: no failed units, the camera DTB and `cma=128M` in use, the sensor found,
+> raw frames and libcamera at 2560×1600, boot in 13.1 s. With `CAMERA=0` (the default) the image is the same as v0.3
+> (same packages and sizes on test builds) apart from the faster boot and the longer `/boot` timeout of rc2.
 
 - **Faster boot, 24 s → 14 s**, on every image: `deviceinfo_no_framebuffer=true` on the kernel command line stops
   the postmarketOS initramfs from waiting 10 s for a framebuffer that cannot appear there. Nothing else in `/boot`
-  changes; measured on a device with `systemd-analyze` (13.8 s, 24.2 s before)
+  changes; measured on a device with `systemd-analyze` (13.1-13.8 s, 24.2 s before)
   ([docs/boot.md](docs/boot.md#kernel-command-line)). *(rc2)*
 - **Front camera** (Samsung S5KC505A): jethac's out-of-tree sensor driver, unchanged, and a device tree patch that
   turns on CAMSS and CCI, the camera rails and the sensor, with `rotation = <180>` (the read-out is upside down on the
@@ -160,7 +160,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Faster boot: no initramfs framebuffer wait, 24 s → 14 s (v0.4-rc2)
 - [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
 - [x] Front camera (S5KC505A): raw frames and libcamera 0.4 at 1280×960, optional (patched DTB)
-- [x] Camera in the image: `CAMERA=1` (v0.4-rc1; built and verified, not flashed on a device yet)
+- [x] Camera in the image: `CAMERA=1` (v0.4-rc1; flashed and booted on one device with rc2)
 - [x] libcamera at full size (`cma=128M`, v0.4-rc2)
 - [ ] Camera sensor tuning
 - [ ] FT8201 panel variant

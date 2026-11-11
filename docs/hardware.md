@@ -25,10 +25,10 @@ What we found on our unit (Himax panel variant) with the postmarketOS kernel 7.1
 
 ## Camera
 
-Works for raw frames on the 7.1.3 kernel (installed on one device, 2026-11-10; the modules load at boot through
-udev and the boot time does not change): chip ID 0x5034 at 0x37, the sensor's
-colour bars and a real scene at 1304×980 through CSIPHY0 → CSID0 → ISPIF0 → VFE0 RDI0 (`SGRBG10_1X10`, `pgAA` in
-memory) with `media-ctl`/`v4l2-ctl`, no errors in the kernel log. Everything is in
+Works for raw frames on the 7.1.3 kernel (installed by hand on one device, 2026-11-10, then as a flashed `CAMERA=1`
+image on the same device, 2026-11-11; the modules load at boot through udev and the boot time does not change): chip
+ID 0x5034 at 0x37, the sensor's colour bars and a real scene at 1304×980 through CSIPHY0 → CSID0 → ISPIF0 → VFE0
+RDI0 (`SGRBG10_1X10`, `pgAA` in memory) with `media-ctl`/`v4l2-ctl`, no errors in the kernel log. Everything is in
 [driver/s5kc505a](../driver/s5kc505a/README.md). What it takes:
 
 - **Sensor driver**: jethac's `s5kc505a` (GPL-2.0, ~1,200 lines), unchanged, built out of tree with the same

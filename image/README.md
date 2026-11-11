@@ -137,7 +137,9 @@ line: 128 MB of contiguous memory instead of the kernel's default 32 MB, which l
 DTB whose sha256 is in `driver/s5kc505a/dtb.sha256`, on top of a `boot.tar` whose DTB is the one it was patched from:
 the DTB is what lk2nd boots, and a DTB that does not boot needs someone at the device
 ([driver/s5kc505a](../driver/s5kc505a/README.md#installing)). With `CAMERA=0` the image is the same as without the
-option.
+option. A `CAMERA=1` image of v0.4-rc2 (`WEB=1 AIRPLAY=1 CAMERA=1`, 451 packages) was flashed and booted on one device:
+lk2nd booted the camera DTB, no failed units, `CmaTotal` 131072 kB, the sensor found, libcamera at 2560×1600, boot
+13.1 s.
 
 Measured on test builds of v0.4-rc1 (same configuration otherwise): `CAMERA=1` adds 20 packages and 48 MB to the
 plain image (218 → 238 packages, root 472 → 520 MB, `.img.gz` 183 → 199 MB): 5 for `v4l-utils`, 15 for libcamera,

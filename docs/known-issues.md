@@ -138,15 +138,16 @@
 
 - With the camera installed (modules loaded by udev) the device boots as fast as without it: 24.2 s, also right after
   a capture and a warm reboot (measured twice, 2026-11-10), and 13.8 s with the kernel command line of v0.4-rc2
-  (2026-11-11). The one slow boot seen after the first camera session points to the CPU clock, not to the camera:
+  (2026-11-11). A flashed `CAMERA=1` image of v0.4-rc2 (`WEB=1 AIRPLAY=1`) booted in 13.1 s and 13.2 s (one device,
+  2026-11-11). The one slow boot seen after the first camera session points to the CPU clock, not to the camera:
   see [Boot](#boot).
 
 ## Not done yet
 
 - The last seconds of boot time (entropy wait, `check_keys`, sub-partition mapping, `msm-firmware-loader`): they need
   changes to the initramfs or to the firmware loader ([Boot](#boot)).
-- Camera in the image: raw frames work with a patched DTB and an extra module, installed by hand
-  ([driver/s5kc505a](../driver/s5kc505a/README.md)); a `CAMERA=1` image has not been flashed yet; libcamera 0.4
+- Camera: raw frames work with a patched DTB and an extra module, installed by hand or as a `CAMERA=1` image
+  ([driver/s5kc505a](../driver/s5kc505a/README.md); the image flashed and booted on one device); libcamera 0.4
   streams full size (2560×1600, 2592×1944) only with `cma=128M` on the kernel command line (`CAMERA=1` adds it; the
   default 32 MB CMA is enough for 1280×960), no tuning. RPM reports the sensor's VDIG rail
   (L2) at 1.200 V, the PMIC register at 1.175 V: not explained yet.
