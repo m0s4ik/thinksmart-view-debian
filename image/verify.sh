@@ -16,6 +16,13 @@
 # empty udev database, as after switch_root from the postmarketOS initramfs.
 # Prints no secrets (of the Wi-Fi profile it only checks that a PSK is present).
 set -u
+# Tools of the build machine (build.sh installs the packages): without them the checks below would fail one by one
+# for the wrong reason, so stop first.
+missing=
+for t in sfdisk:fdisk tune2fs:e2fsprogs e2fsck:e2fsprogs dmsetup:dmsetup udevadm:udev systemctl:systemd nft:nftables; do
+    command -v "${t%%:*}" >/dev/null 2>&1 || missing="$missing ${t%%:*} (package ${t#*:})"
+done
+[ -z "$missing" ] || { echo "verify.sh: missing on the build machine:$missing" >&2; exit 2; }
 IMG=$1
 SECTORS=${2:-14280671}
 KVER=7.1.3-msm8953

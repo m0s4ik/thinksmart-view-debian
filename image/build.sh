@@ -186,7 +186,9 @@ mkdir -p "$C/apt/partial" "$OUT"
 
 step "host packages"
 missing=
-for p in debootstrap qemu-user-static binfmt-support pigz python3 fdisk e2fsprogs; do
+# systemd, udev, dmsetup and nftables: for verify.sh (systemctl --root, udevadm verify/test, the test device-mapper,
+# nft -c), which runs at the end
+for p in debootstrap qemu-user-static binfmt-support pigz python3 fdisk e2fsprogs systemd udev dmsetup nftables; do
     dpkg-query -W -f='${Status}' $p 2>/dev/null | grep -q 'install ok installed' || missing="$missing $p"
 done
 if [ -n "$missing" ]; then
