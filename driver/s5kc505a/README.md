@@ -68,7 +68,7 @@ Notes:
   libcamera 0.7 sets both from the rotation property (`camera_sensor_rotation` on the subdevice), so its frames are
   upright. A raw capture sets them by hand ([below](#capturing-a-raw-frame)). The flips change the Bayer order (the
   read-out window does not move): GRBG without flips, RGGB with `horizontal_flip`, BGGR with `vertical_flip`, GBRG
-  with both (checked on the device for both); the driver reports the current order on its pad, the controls carry
+  with both (all four checked on the device with raw frames); the driver reports the current order on its pad, the controls carry
   `V4L2_CTRL_FLAG_MODIFY_LAYOUT` and cannot change while streaming.
 - Measured on the device: RPM reports L2 at 1.200 V, the PMIC's own register (read through the SPMI regulator
   driver) at **1.175 V**. Lower than requested, so on the safe side; why they differ is not known yet.
@@ -241,6 +241,8 @@ CMA while streaming. Warnings that remain: no static sensor properties, no `s5kc
   Reserved 128 MiB` (`CmaTotal: 131072 kB` in `/proc/meminfo`); boot time is unchanged and so, in practice, is
   `MemAvailable`, since the kernel lends free CMA pages to movable allocations until a driver needs them. 64M and 96M
   are not tried.
+- The GPU debayer leaves a one-pixel border in the wrong colour (first row, first and last column, measured at
+  1280x960): crop it if it matters.
 - `multifilesink location=… max-files=1 next-file=buffer` wrote nothing with 0.7.1 (no error; not investigated):
   use `filesink` as above. `libcamerasrc` has no `num-buffers`; `fakesink num-buffers=N` ends the pipeline.
 - **trixie's own 0.4.0** debayers on the CPU (about 10.6 fps at 2560x1600, a slight green cast) and does not use the
