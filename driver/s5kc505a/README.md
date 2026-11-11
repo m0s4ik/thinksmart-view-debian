@@ -6,7 +6,7 @@ in `extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`), udev lo
 `v4l2-ctl`, no errors in the kernel log. Boot time unchanged (24.2 s); one isolated slow boot is still unexplained
 ([known-issues.md](../../docs/known-issues.md#camera)). libcamera 0.4 of Debian trixie streams 1280x960 with auto
 exposure ([below](#libcamera)); full size fails on CMA. The read-out is upside down, so the DT now says
-`rotation = <180>` (every frame so far was taken with 0): that DTB has not been booted on a device yet. The camera needs a patched DTB,
+`rotation = <180>`; libcamera 0.4 reports it but does not turn the frame. The camera needs a patched DTB,
 so it is optional: `CAMERA=1` in `image/config.env` builds it into the image ([image/README.md](../../image/README.md#front-camera-optional);
 not flashed on a device yet), or install it by hand as below.
 
@@ -181,8 +181,8 @@ properties, no `s5kc505a.yaml` tuning (falls back to `uncalibrated.yaml`), no ca
 - **Full size (2560x1600, the default) fails**: `dma-heap allocation failure`, kernel `cma: ... alloc failed,
   req-size: 3000 pages, ret: -16`. The 32 MB CMA is too small or too fragmented for full-size RGB buffers; a larger
   `cma=` on the kernel command line is not tried. Ask for 1280x960.
-- The frames were upside down (taken with a DT that said `rotation = <0>`); whether `libcamerasrc` turns them with
-  `rotation = <180>` is not checked yet.
+- With `rotation = <180>` in the DT the frames of `libcamerasrc` 0.4 are still upside down (the sensor has no flip
+  controls): add `videoflip method=rotate-180` after `videoconvert` (`gstreamer1.0-plugins-good`).
 - `CAMERA=1` does not install libcamera: it stays optional, with the line above.
 
 ## Credits and licence

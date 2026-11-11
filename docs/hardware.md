@@ -43,8 +43,8 @@ memory) with `media-ctl`/`v4l2-ctl`, no errors in the kernel log. Everything is 
 - **libcamera**: trixie's 0.4.0 (simple pipeline handler, software ISP) streams 1280×960 and 640×480 through
   `libcamerasrc` with auto exposure; the default 2560×1600 fails to allocate from the 32 MB CMA
   ([driver README](../driver/s5kc505a/README.md#libcamera)).
-- **Open**: RPM reports L2 at 1.200 V, the PMIC register at 1.175 V; the `rotation = <180>` DTB not booted yet (every
-  frame so far was taken with 0, upside down); no sensor tuning, so colours are only a guess (raw: grey world;
+- **Open**: RPM reports L2 at 1.200 V, the PMIC register at 1.175 V; `libcamerasrc` 0.4 does not turn the
+  frame by the DT's `rotation = <180>` (the application has to); no sensor tuning, so colours are only a guess (raw: grey world;
   libcamera: `uncalibrated.yaml`, slight green cast). One slow boot (85 s) seen once after the first camera session, not reproduced
   ([known-issues.md](known-issues.md#camera)).
 - Realistic uses: presence detection at 1304×980 binned, snapshots on request; the lens cover (GPIO 87) does not cut
