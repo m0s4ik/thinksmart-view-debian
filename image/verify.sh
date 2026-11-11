@@ -7,7 +7,8 @@
 # and fstab, the TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile,
 # Python and the ALSA configuration (through qemu); the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
 # EGL and GBM loaded through qemu) and the web layer when /etc/thinksmart-version says it is on. Front camera
-# (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, the DTBs, the module.
+# (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, the DTBs, the module,
+# libcamera with its software ISP and libcamerasrc (loaded through qemu), no Debian Mesa pulled by them.
 # Headless boot: dmsetup and the device-mapper udev rules, /boot nofail (fstab generator of the image), and a test
 # device-mapper on p1 (read-only, removed at the end) run through `udevadm test` with the rules of the image and an
 # empty udev database, as after switch_root from the postmarketOS initramfs.
@@ -48,6 +49,11 @@ inside() { chroot "$V" /usr/bin/env -i PATH=/usr/sbin:/usr/bin HOME=/tmp LANG=C.
 enabled() { systemctl --root="$V" is-enabled "$1" 2>/dev/null; }
 dpkgq() { dpkg-query --admindir="$V/var/lib/dpkg" "$@" 2>/dev/null; }
 installed() { dpkgq -W -f='${db:Status-Abbrev}' "$1" | grep -q '^ii'; }
+# Debian's Mesa and LLVM: mesa-freedreno stands in for them, nothing may pull them
+debian_mesa() {
+    dpkgq -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" {print $2}' |
+        grep -E '^(libllvm|libgl1-mesa-dri|mesa-libgallium|libegl-mesa0|libglx-mesa0|libgbm1|mesa-)' | grep -vx mesa-freedreno
+}
 
 echo "Verifying $IMG"
 size=$(stat -c %s "$IMG")
@@ -212,8 +218,19 @@ if grep -Eq '^[[:space:]]*fdt[[:space:]]' "$E" || [ -e "$MD/extra/s5kc505a.ko" ]
     [ "$vm" = "vermagic=$KVER SMP preempt mod_unload aarch64" ] && ok "s5kc505a.ko: $vm" || no "s5kc505a.ko: vermagic '${vm#vermagic=}', expected $KVER"
     grep -q '^extra/s5kc505a.ko:' "$MD/modules.dep" && ok "modules.dep: extra/s5kc505a.ko" || no "modules.dep without s5kc505a"
     grep -q 'samsung,s5kc505a' "$MD/modules.alias" && ok "modules.alias: samsung,s5kc505a" || no "modules.alias without s5kc505a"
-    if installed v4l-utils; then ok "v4l-utils $(dpkgq -W -f='${Version}' v4l-utils)"; else no "v4l-utils not installed"; fi
+    for p in v4l-utils libcamera0.4 libcamera-ipa gstreamer1.0-libcamera gstreamer1.0-tools; do
+        if installed $p; then ok "$p $(dpkgq -W -f='${Version}' $p)"; else no "$p not installed"; fi
+    done
+    # the simple pipeline handler's software ISP (qcom-camss has no ISP of its own); the .sign is checked when loaded
+    for f in libcamera/ipa_soft_simple.so libcamera/ipa_soft_simple.so.sign gstreamer-1.0/libgstlibcamera.so; do
+        check "/usr/lib/aarch64-linux-gnu/$f" test -s "$V/usr/lib/aarch64-linux-gnu/$f"
+    done
+    check "soft_ipa_proxy" test -x "$V/usr/libexec/aarch64-linux-gnu/libcamera/soft_ipa_proxy"
+    m=$(debian_mesa)
+    [ -z "$m" ] && ok "camera userspace without Debian Mesa" || no "Debian Mesa installed with the camera userspace: $m"
+    CAMERA=1
 else
+    CAMERA=0
     grep -Eq '^[[:space:]]*fdtdir /$' "$E" && ok "camera off: extlinux.conf with fdtdir / (the kernel package's DTB)" \
         || no "extlinux.conf without fdtdir / and without fdt"
 fi
@@ -235,8 +252,7 @@ for p in libgbm1 libegl-mesa0 libglx-mesa0; do
 done
 grep -aq "/usr/lib/aarch64-linux-gnu/gbm" "$ML/libgbm.so.1" && ok "libgbm looks for its backend in /usr/lib/aarch64-linux-gnu/gbm" \
     || no "libgbm built for another path (its backend would not be found)"
-debmesa=$(dpkgq -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" {print $2}' |
-    grep -E '^(libllvm|libgl1-mesa-dri|mesa-libgallium|libegl-mesa0|libglx-mesa0|libgbm1|mesa-)' | grep -vx mesa-freedreno)
+debmesa=$(debian_mesa)
 llvm=$(find "$V/usr/lib" -name "libLLVM*" 2>/dev/null | head -n1)
 [ -z "$debmesa$llvm" ] && ok "no Debian Mesa or LLVM" || no "Debian Mesa or LLVM installed: $debmesa $llvm"
 [ ! -e "$V/opt/mesa-freedreno" ] && [ ! -e "$V/etc/ld.so.conf.d/mesa-freedreno.conf" ] && ok "no Mesa left in /opt" || no "old Mesa in /opt/mesa-freedreno"
@@ -276,9 +292,9 @@ if grep -q '^AirPlay runtime: GStreamer' "$V/etc/thinksmart-version"; then
         || no "gstreamer1.0-plugins-bad installed"
 else
     AIRPLAY=0
-    if [ "$WEB" = 0 ]; then
+    if [ "$WEB" = 0 ] && [ "$CAMERA" = 0 ]; then
         pkgs=$(dpkgq -W -f='${db:Status-Abbrev} ${Package}\n' | awk '$1 == "ii" {print $2}' | grep -E '^libgstreamer')
-        [ -z "$pkgs" ] && ok "web layer and AirPlay runtime off: no GStreamer" || no "GStreamer installed: $pkgs"
+        [ -z "$pkgs" ] && ok "web layer, AirPlay runtime and camera off: no GStreamer" || no "GStreamer installed: $pkgs"
     fi
 fi
 
@@ -360,11 +376,18 @@ fi
 echo "$out" | grep -q '^gbm ok$' && ok "GLESv2, GBM and its backend dri_gbm.so load" || no "GBM or GLESv2 do not load"
 libs="libEGL.so.1 libGLESv2.so.2 libEGL_mesa.so.0 libgbm.so.1 gbm/dri_gbm.so"
 [ "$WEB" = 1 ] && libs="$libs libWPEWebKit-2.0.so.1 wpe-webkit-2.0/WPEWebProcess wpe-webkit-2.0/WPENetworkProcess libgstgl-1.0.so.0"
+[ "$CAMERA" = 1 ] && libs="$libs libcamera.so.0.4 libcamera/ipa_soft_simple.so gstreamer-1.0/libgstlibcamera.so"
 [ "$AIRPLAY" = 1 ] && libs="$libs libplist-2.0.so.4 libdns_sd.so.1 gstreamer-1.0/libgstvideo4linux2.so gstreamer-1.0/libgstvideoparsersbad.so gstreamer-1.0/libgstunixfd.so gstreamer-1.0/libgstlibav.so"
 for f in $libs; do
     nf=$(inside /usr/bin/ldd "/usr/lib/aarch64-linux-gnu/$f" 2>&1 | grep -E 'not found|No such file|not a dynamic')
     [ -z "$nf" ] && ok "ldd $f: every library found" || no "ldd $f: $nf"
 done
+if [ "$CAMERA" = 1 ]; then
+    # registers GStreamer's libcamera plugin and creates the element (no camera is opened before it starts)
+    out=$(inside GST_REGISTRY=/tmp/gst-registry.bin /usr/bin/gst-inspect-1.0 libcamerasrc 2>&1)
+    echo "$out" | grep -q 'libgstlibcamera.so' && ok "gst-inspect-1.0 libcamerasrc: element loads" \
+        || { no "gst-inspect-1.0 libcamerasrc"; echo "$out" | head -3 | sed 's/^/        /'; }
+fi
 
 echo
 sed 's/^/  /' "$V/etc/thinksmart-version"

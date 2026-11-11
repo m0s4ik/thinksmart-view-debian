@@ -80,6 +80,11 @@ PACKAGES="systemd systemd-sysv systemd-timesyncd udev kmod dbus
 AIRPLAY_PACKAGES="gstreamer1.0-plugins-base gstreamer1.0-plugins-good gstreamer1.0-libav libgstreamer-plugins-bad1.0-0
   libplist-2.0-4 libavahi-compat-libdnssd1"
 AIRPLAY_BAD_PLUGINS="libgstvideoparsersbad.so libgstunixfd.so"
+# CAMERA=1: libcamera 0.4 with the simple pipeline handler and its software ISP (ipa_soft_simple, for qcom-camss),
+# GStreamer's libcamerasrc and gst-launch-1.0 (GStreamer core only: 15 packages, ~45 MB). Not gstreamer1.0-plugins-base
+# (videoconvert) or -good (videoflip, to turn the upside-down frame): they pull X11 libraries, cairo, PulseAudio, ...
+# (+24 and +93 packages); apt install them on the device if an application needs them (driver/s5kc505a/README.md).
+CAMERA_PACKAGES="libcamera0.4 libcamera-ipa gstreamer1.0-libcamera gstreamer1.0-tools"
 # dmsetup: udev rules of device-mapper (55-dm.rules, 60-persistent-storage-dm.rules). /boot and the root file system
 # are device-mapper devices (kpartx in the initramfs): without them, no /dev/disk/by-uuid for /boot and emergency mode
 # at boot. The postmarketOS initramfs also needs rootfs/etc/udev/rules.d/54-dm-initramfs.rules (docs/boot.md).
@@ -265,6 +270,12 @@ if [ "$AIRPLAY" = 1 ]; then
     cp "$R/tmp/gstreamer1.0-plugins-bad-airplay.deb" "$OUT/gstreamer1.0-plugins-bad-airplay_${badver}+thinksmart1_arm64.deb"
     rm -rf "$R/tmp/bad" "$BP" "$R"/tmp/gstreamer1.0-plugins-bad*.deb
 fi
+if [ "$CAMERA" = 1 ]; then
+    # after mesa-freedreno, like the web layer and the AirPlay runtime: it stands in for Debian's Mesa
+    step "camera userspace (libcamera, libcamerasrc)"
+    # shellcheck disable=SC2086
+    in_chroot apt-get install -y -q --no-install-recommends $CAMERA_PACKAGES
+fi
 rm -f "$R"/tmp/*.deb
 in_chroot apt-get -y -q dist-upgrade
 umount "$R/var/cache/apt/archives"
@@ -442,7 +453,7 @@ AirPlay runtime: $([ "$AIRPLAY" = 1 ] && in_chroot dpkg-query -W -f='GStreamer $
 ${EXTRA:-customization: none}
 UUID: boot $BOOT_UUID  root $ROOT_UUID
 EOF
-[ "$CAMERA" = 0 ] || echo "camera: s5kc505a, fdt /$CAMERA_DTB (extlinux.conf.nocamera: without it)" >> "$R/etc/thinksmart-version"
+[ "$CAMERA" = 0 ] || echo "camera: s5kc505a, fdt /$CAMERA_DTB (extlinux.conf.nocamera: without it), libcamera $(in_chroot dpkg-query -W -f='${Version}' libcamera0.4)" >> "$R/etc/thinksmart-version"
 rm -f "$R/usr/sbin/policy-rc.d" "$R/etc/resolv.conf"
 rm -rf "$R"/var/lib/apt/lists/* "$R"/var/cache/apt/*.bin "$R"/var/cache/apt/archives/*.deb
 find "$R/var/log" -type f -exec truncate -s 0 {} +
