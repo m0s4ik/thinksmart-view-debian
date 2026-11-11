@@ -62,6 +62,41 @@ the initramfs). Where the time of a boot before the change went, from the kernel
 The remaining seconds need changes to the initramfs or to the firmware loader and are not done
 ([known-issues.md](known-issues.md#boot)).
 
+## Boot report
+
+Since v0.4-rc2 every image has `thinksmart-boot-report.service`, so each boot leaves its time in the journal and a
+slow boot leaves what is needed to understand it. It starts with userspace (`DefaultDependencies=no`, wanted by
+`sysinit.target`), is `Type=simple` so nothing waits for it, and runs `/usr/local/sbin/thinksmart-boot-report`
+(POSIX sh, coreutils and util-linux only). About once a second until systemd reports the boot finished
+(`FinishTimestampMonotonic`), at most until 180 s after the kernel started, it takes a sample: a fixed CPU benchmark
+(a shell loop of 10000 iterations, timed in its own CPU time from `/proc/<pid>/schedstat`, so other work on the CPUs
+does not count), `scaling_cur_freq` and `cpuinfo_cur_freq` of `policy0`, the online CPUs and the thermal zones. The
+CPU clock state (every cpufreq policy with `time_in_state` and `total_trans`, the CPU lines of
+`/sys/kernel/debug/clk/clk_summary`, the `cpr`/`cpu` lines of `pm_genpd_summary`, `devices_deferred`) is kept at
+the first sample, whenever the benchmark changes by `SLOW_RATIO` or more from one sample to the next (at most four
+times: while slow and right after), and at the end. All of it stays in `/run/thinksmart-boot/` (`samples`,
+`snapshot-*`, `report`) until the next boot.
+
+Then one line in the journal, identifier `thinksmart-boot` (the times here are a real boot's, the other figures only
+show the format):
+
+```
+$ journalctl -t thinksmart-boot          # every boot; the journal is on disk (50 MB), so earlier boots are there
+boot 13.840s (kernel 6.004s + userspace 7.836s); CPU benchmark 41/43/52 ms (fastest/median/slowest of 9, cpu time); cpu0 1689600 kHz (hw 1689600), online 0-7, max 41 C; unused clocks off 0.871s, cpufreq 0.965s: clocks before cpufreq
+```
+
+The times are systemd's own (as in `systemd-analyze`; "kernel" includes the postmarketOS initramfs); the last part is
+the order of `clk: Disabling unused clocks` and `cpufreq_policy_online` in the kernel log
+([known-issues.md](known-issues.md#boot)). A boot is **SLOW** when it takes more than `SLOW_TOTAL` seconds (30), when
+the slowest benchmark sample takes `SLOW_RATIO` (5) times the fastest or more (against at least 10 ms: CPU time is
+counted in 4 ms scheduler ticks), when a sample takes `SLOW_BENCH_MS` or more (off by default), or when the boot has
+not finished after `MAX_WAIT` (180 s). Then the line starts with `SLOW`, has priority warning
+(`journalctl -t thinksmart-boot -p warning` lists only those) and ends with the reasons, and every sample and snapshot
+follows as separate lines. The settings are in `/etc/default/thinksmart-boot-report`. The service reads `/proc`,
+`/sys` and debugfs only (systemd mounts debugfs at the start), has no network and runs under `ProtectSystem=strict`;
+it ignores every error and exits by itself. Its own cost is in `journalctl -u thinksmart-boot-report` (`Consumed …
+CPU time`).
+
 ## System
 
 Debian 13 trixie arm64, `minbase` + `--no-install-recommends`: systemd, udev, NetworkManager + wpasupplicant,
@@ -90,8 +125,8 @@ disk (50 MB, kept across reboots). About 470 MB used on root without the optiona
   from `/var/lib/thinksmart/volume` or `VOLUME` of `/etc/default/thinksmart-audio`, and leaves the software volume
   (`/etc/asound.conf`, pcm `speaker`, control `Master`, also the `default` pcm; converted to 16 bit, see known-issues) at 100%. `alsa-restore`/`alsa-state` are
   masked.
-- **Services**: `msm-firmware-loader`, `thinksmart-audio`, NetworkManager, ssh, timesyncd, nftables, avahi-daemon; login on the screen
-  (`getty@tty1`).
+- **Services**: `msm-firmware-loader`, `thinksmart-audio`, `thinksmart-boot-report` ([above](#boot-report)),
+  NetworkManager, ssh, timesyncd, nftables, avahi-daemon; login on the screen (`getty@tty1`).
 - **Splash** (optional, done by an application): the screen is free about 12 s after the kernel starts (17.5 s
   before v0.4-rc2, [above](#boot-time)). The framebuffer is `/dev/fb0` (800×1280, BGRX); a unit with
   `DefaultDependencies=no` that loads `msm` and the panel module itself (without waiting for udev) and copies a

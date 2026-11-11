@@ -194,8 +194,8 @@ with `nofail` and a 90 s device timeout; `dmsetup` and the device-mapper udev ru
 no unit requires `local-fs.target` or `/boot`; a **test device-mapper on p1** run through `udevadm test --action=add`
 in a mount namespace with the image's rules and an empty `/run/udev` (it must get `/dev/disk/by-uuid/<p1>` and not
 `SYSTEMD_READY=0`); the image's own `systemd-fstab-generator` (through qemu); kernel, initramfs, DTBs; `modules.dep`
-(TAS5782M, ath10k, accelerometer); firmware; UCM; enabled and masked services; keys, Wi-Fi profile (without printing
-the PSK), `nft -c`; inside the image: Python with venv and the ALSA pcms `speaker` and `default`. GPU: the
+(TAS5782M, ath10k, accelerometer); firmware; UCM; enabled and masked services, the boot report (`sh -n`,
+`Type=simple`); keys, Wi-Fi profile (without printing the PSK), `nft -c`; inside the image: Python with venv and the ALSA pcms `speaker` and `default`. GPU: the
 `mesa-freedreno` package, libglvnd's dispatchers and Mesa's vendor file, what the package provides, libgbm's backend
 path, no Debian Mesa or LLVM, `libEGL.so.1` loading Mesa through libglvnd (gbm and wayland platforms) and `ldd` of the
 GL libraries through qemu. Web layer: on (WPE ≥ 2.54, bubblewrap, user namespaces in the kernel, `ldd` of WebKit's
@@ -215,6 +215,12 @@ and the AirPlay runtime are off too).
 
 - `ssh root@<device>`; versions in `/etc/thinksmart-version`.
 - Volume at boot: `/etc/default/thinksmart-audio` (or write the percent to `/var/lib/thinksmart/volume`).
+- Boot times: `journalctl -t thinksmart-boot` (one line per boot, `SLOW` ones with details; settings in
+  `/etc/default/thinksmart-boot-report`, [docs/boot.md](../docs/boot.md#boot-report)). On a device whose image does
+  not have it yet (before v0.4-rc2), install it by hand: copy `rootfs/usr/local/sbin/thinksmart-boot-report` (mode
+  0755), `rootfs/etc/systemd/system/thinksmart-boot-report.service` and `rootfs/etc/default/thinksmart-boot-report`
+  to the same paths, then `systemctl daemon-reload && systemctl enable thinksmart-boot-report` (the next boot reports;
+  `systemctl start thinksmart-boot-report` reports the current one at once).
 - `apt upgrade` is fine: Debian packages do not touch `/boot` or the 7.1.3 modules.
 - From v0.2 or earlier (Mesa in `/opt/mesa-freedreno`) to the Mesa package without reflashing (done on a device
   running v0.2: apt adds libglvnd0, libegl1, libgles2 and libwayland-client0; GPU programs then use the new Mesa

@@ -64,7 +64,12 @@
   is still slow when ssh answers (in the one slow boot speed came back at 81.5 s, shortly before the end),
   `cpuinfo_cur_freq` against `scaling_cur_freq` in `/sys/devices/system/cpu/cpu*/cpufreq/`, the lines of the CPU
   clocks in `/sys/kernel/debug/clk/clk_summary` (`mount -t debugfs none /sys/kernel/debug`) and
-  `/sys/class/thermal/thermal_zone*/temp`.
+  `/sys/class/thermal/thermal_zone*/temp`. Since v0.4-rc2 the image records this by itself: `thinksmart-boot-report`
+  writes every boot's time to the journal (`journalctl -t thinksmart-boot`), and a boot above 30 s, or one in which
+  the CPU benchmark slows down five times or more, is marked `SLOW` and followed by the samples taken every second
+  while it was slow (benchmark, `scaling_cur_freq`/`cpuinfo_cur_freq`, temperatures) and the CPU clocks, cpufreq
+  statistics and CPU power domains as they were then, plus the order of the two kernel messages
+  ([boot.md](boot.md#boot-report)).
 - lk2nd supports a **single entry** in `extlinux.conf`.
 - **Volume Up at power-on is not a rescue path**: with a rescue boot image written to the `recovery` partition,
   holding Volume Up at power-on did not boot it (tried once on one device, 2026-11-11: black screen, no Linux; cause

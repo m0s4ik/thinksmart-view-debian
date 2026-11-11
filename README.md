@@ -105,6 +105,10 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
   ([driver/s5kc505a](driver/s5kc505a/README.md#lens-cover)). *(rc2)*
 - **`/boot` device timeout 90 s** instead of 15 s, on every image: in one slow boot the device came up after 15 s and
   `/boot` was left unmounted ([docs/boot.md](docs/boot.md)). *(rc2)*
+- **Boot report**, on every image: `thinksmart-boot-report.service` writes each boot's time, a small CPU benchmark,
+  the CPU frequency and temperature to the journal in one line (`journalctl -t thinksmart-boot`); a slow boot is
+  marked `SLOW` and gets the samples and CPU clock state taken while it was slow
+  ([docs/boot.md](docs/boot.md#boot-report)). *(rc2)*
 - **Build host tools**: `build.sh` also installs `systemd udev dmsetup nftables`, which `verify.sh` needs on the build
   machine (in a bare `debian:trixie` container they were missing and 13 checks failed for that reason only), and
   `verify.sh` stops with the names of missing tools instead. *(rc2)*
