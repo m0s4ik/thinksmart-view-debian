@@ -9,8 +9,9 @@
 # configuration (through qemu); the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
 # EGL and GBM loaded through qemu) and the web layer when /etc/thinksmart-version says it is on. Front camera
 # (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, `cma=` on the command
-# line, the DTBs, the module, libcamera with its software ISP and libcamerasrc (loaded through qemu), no Debian Mesa
-# pulled by them.
+# line, the DTBs, the module, libcamera 0.7 from trixie-backports with its software ISP and libcamerasrc (loaded through
+# qemu, libcamera linked to libglvnd's EGL and GLES for the GPU debayer), the trixie-backports source, the dma_heap udev
+# rule, no Debian Mesa pulled by them.
 # Headless boot: dmsetup and the device-mapper udev rules, /boot nofail (fstab generator of the image), and a test
 # device-mapper on p1 (read-only, removed at the end) run through `udevadm test` with the rules of the image and an
 # empty udev database, as after switch_root from the postmarketOS initramfs.
@@ -241,22 +242,47 @@ if grep -Eq '^[[:space:]]*fdt[[:space:]]' "$E" || [ -e "$MD/extra/s5kc505a.ko" ]
     [ "$vm" = "vermagic=$KVER SMP preempt mod_unload aarch64" ] && ok "s5kc505a.ko: $vm" || no "s5kc505a.ko: vermagic '${vm#vermagic=}', expected $KVER"
     grep -q '^extra/s5kc505a.ko:' "$MD/modules.dep" && ok "modules.dep: extra/s5kc505a.ko" || no "modules.dep without s5kc505a"
     grep -q 'samsung,s5kc505a' "$MD/modules.alias" && ok "modules.alias: samsung,s5kc505a" || no "modules.alias without s5kc505a"
-    for p in v4l-utils libcamera0.4 libcamera-ipa gstreamer1.0-libcamera gstreamer1.0-tools; do
+    for p in v4l-utils gstreamer1.0-tools; do
         if installed $p; then ok "$p $(dpkgq -W -f='${Version}' $p)"; else no "$p not installed"; fi
     done
+    # libcamera 0.7 of trixie-backports (trixie's 0.4 cannot follow the sensor's flips: upside-down frames)
+    for p in libcamera0.7 libcamera-ipa gstreamer1.0-libcamera; do
+        v=$(dpkgq -W -f='${Version}' $p)
+        case "$v" in
+            0.[7-9].*~bpo13*) installed $p && ok "$p $v (trixie-backports)" || no "$p not installed" ;;
+            *) no "$p ${v:-not installed}, expected 0.7 or newer from trixie-backports" ;;
+        esac
+    done
+    ! installed libcamera0.4 && ok "not trixie's libcamera0.4" || no "libcamera0.4 installed"
     # the simple pipeline handler's software ISP (qcom-camss has no ISP of its own); the .sign is checked when loaded
-    for f in libcamera/ipa_soft_simple.so libcamera/ipa_soft_simple.so.sign gstreamer-1.0/libgstlibcamera.so; do
+    for f in libcamera/ipa/ipa_soft_simple.so libcamera/ipa/ipa_soft_simple.so.sign gstreamer-1.0/libgstlibcamera.so; do
         check "/usr/lib/aarch64-linux-gnu/$f" test -s "$V/usr/lib/aarch64-linux-gnu/$f"
     done
     check "soft_ipa_proxy" test -x "$V/usr/libexec/aarch64-linux-gnu/libcamera/soft_ipa_proxy"
     m=$(debian_mesa)
     [ -z "$m" ] && ok "camera userspace without Debian Mesa" || no "Debian Mesa installed with the camera userspace: $m"
+    # trixie-backports stays in the sources (updates for libcamera) at Debian's default priority: no pin raises it
+    BS=$V/etc/apt/sources.list.d/debian-backports.sources
+    grep -q '^Suites: trixie-backports$' "$BS" 2>/dev/null && grep -q '^Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg$' "$BS" \
+        && ok "apt source trixie-backports (debian-backports.sources)" || no "no trixie-backports source in $BS"
+    ! grep -rqs 'backports' "$V/etc/apt/preferences" "$V/etc/apt/preferences.d" \
+        && ok "trixie-backports at the default priority (no apt pin)" || no "an apt pin names backports"
+    # libcamera's buffers come from /dev/dma_heap/* (root only by default): group video
+    UR=$V/etc/udev/rules.d/70-camera-dma-heap.rules
+    grep -q '^SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"$' "$UR" 2>/dev/null \
+        && udevadm verify --resolve-names=never "$UR" >/dev/null 2>&1 \
+        && ok "70-camera-dma-heap.rules: dma_heap for group video (udevadm verify)" || no "70-camera-dma-heap.rules"
+    for g in video render; do
+        grep -q "^$g:" "$V/etc/group" && ok "group $g exists (camera without root: video + render)" || no "no group $g"
+    done
     CAMERA=1
 else
     CAMERA=0
     grep -Eq '^[[:space:]]*fdtdir /$' "$E" && ok "camera off: extlinux.conf with fdtdir / (the kernel package's DTB)" \
         || no "extlinux.conf without fdtdir / and without fdt"
     ! grep -q ' cma=' "$E" && ok "camera off: no cma= on the kernel command line" || no "camera off but cma= in extlinux.conf"
+    [ ! -e "$V/etc/apt/sources.list.d/debian-backports.sources" ] && [ ! -e "$V/etc/udev/rules.d/70-camera-dma-heap.rules" ] \
+        && ok "camera off: no trixie-backports source, no dma_heap rule" || no "camera off but trixie-backports source or dma_heap rule present"
 fi
 
 echo "-- GPU: reduced Mesa"
@@ -400,16 +426,22 @@ fi
 echo "$out" | grep -q '^gbm ok$' && ok "GLESv2, GBM and its backend dri_gbm.so load" || no "GBM or GLESv2 do not load"
 libs="libEGL.so.1 libGLESv2.so.2 libEGL_mesa.so.0 libgbm.so.1 gbm/dri_gbm.so"
 [ "$WEB" = 1 ] && libs="$libs libWPEWebKit-2.0.so.1 wpe-webkit-2.0/WPEWebProcess wpe-webkit-2.0/WPENetworkProcess libgstgl-1.0.so.0"
-[ "$CAMERA" = 1 ] && libs="$libs libcamera.so.0.4 libcamera/ipa_soft_simple.so gstreamer-1.0/libgstlibcamera.so"
+[ "$CAMERA" = 1 ] && libs="$libs libcamera.so.0.7 libcamera/ipa/ipa_soft_simple.so gstreamer-1.0/libgstlibcamera.so"
 [ "$AIRPLAY" = 1 ] && libs="$libs libplist-2.0.so.4 libdns_sd.so.1 gstreamer-1.0/libgstvideo4linux2.so gstreamer-1.0/libgstvideoparsersbad.so gstreamer-1.0/libgstunixfd.so gstreamer-1.0/libgstlibav.so"
 for f in $libs; do
     nf=$(inside /usr/bin/ldd "/usr/lib/aarch64-linux-gnu/$f" 2>&1 | grep -E 'not found|No such file|not a dynamic')
     [ -z "$nf" ] && ok "ldd $f: every library found" || no "ldd $f: $nf"
 done
 if [ "$CAMERA" = 1 ]; then
+    # the software ISP debayers on the GPU: libcamera links libglvnd's EGL and GLES, whose vendor is mesa-freedreno
+    # (loaded above)
+    out=$(inside /usr/bin/ldd /usr/lib/aarch64-linux-gnu/libcamera.so.0.7 2>&1)
+    echo "$out" | grep -q 'libEGL.so.1 => /' && echo "$out" | grep -q 'libGLESv2.so.2 => /' \
+        && ok "libcamera.so.0.7: libEGL.so.1 and libGLESv2.so.2 resolved (GPU debayer through mesa-freedreno)" \
+        || no "libcamera.so.0.7 without libEGL/libGLESv2"
     # registers GStreamer's libcamera plugin and creates the element (no camera is opened before it starts)
     out=$(inside GST_REGISTRY=/tmp/gst-registry.bin /usr/bin/gst-inspect-1.0 libcamerasrc 2>&1)
-    echo "$out" | grep -q 'libgstlibcamera.so' && ok "gst-inspect-1.0 libcamerasrc: element loads" \
+    echo "$out" | grep -q 'libgstlibcamera.so' && echo "$out" | grep -Eq 'Version +0\.[7-9]' && ok "gst-inspect-1.0 libcamerasrc: element loads (0.7)" \
         || { no "gst-inspect-1.0 libcamerasrc"; echo "$out" | head -3 | sed 's/^/        /'; }
 fi
 
