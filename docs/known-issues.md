@@ -66,6 +66,10 @@
   clocks in `/sys/kernel/debug/clk/clk_summary` (`mount -t debugfs none /sys/kernel/debug`) and
   `/sys/class/thermal/thermal_zone*/temp`.
 - lk2nd supports a **single entry** in `extlinux.conf`.
+- **Volume Up at power-on is not a rescue path**: with a rescue boot image written to the `recovery` partition,
+  holding Volume Up at power-on did not boot it (tried once on one device, 2026-11-11: black screen, no Linux; cause
+  unknown). EDL ([flashing.md](flashing.md#going-back)) is the tested way back; lk2nd's fastboot (`fastboot boot`) is
+  not tried yet.
 - `kernel.panic` is 0 and there is no watchdog device: after a kernel panic the device stays stopped until the power
   is cut.
 - Harmless messages: `Failed to set OPP config` on cpu0, `psci: failed to set PC mode`.

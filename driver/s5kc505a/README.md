@@ -134,7 +134,10 @@ have `rotation = <180>` (`/proc/device-tree/soc@0/cci@1b0c000/i2c-bus@0/camera@3
 the change has 0).
 
 Back: `cp /boot/extlinux/extlinux.conf.nocamera /boot/extlinux/extlinux.conf`, remove `extra/s5kc505a.ko`,
-`depmod -a`, reboot. If Linux does not come up, boot `boot-current.img` with `fastboot boot` and do the same.
+`depmod -a`, reboot. If Linux does not come up, boot `boot-current.img` with `fastboot boot` and do the same (not
+tried yet; holding Volume Up at power-on with a rescue image in `recovery` did not boot it on the one device tried, see
+[known-issues.md](../../docs/known-issues.md#boot)), or rewrite p1 over EDL
+([docs/flashing.md](../../docs/flashing.md#seeing-why-an-image-does-not-boot)).
 
 How it was tried first, on a device without a USB cable at hand: the camera boot counted once. A oneshot unit
 ordered before `boot.mount` and `sysinit.target` (`DefaultDependencies=no`; it mounts the `pmOS_boot` file system
@@ -177,8 +180,9 @@ scale): raise `vertical_blanking` for longer exposures (lower frame rate) or use
 The sliding cover is the switch `SW_CAMERA_LENS_COVER` (code 9) of `gpio-keys` (GPIO 87), the input device that also has
 Vol+. It does **not** cut the sensor's power, so software has to read it before capturing. `gpio-keys`
 was `/dev/input/event0` on the device tried, but find it rather than hard-code it: its
-`/sys/class/input/event*/device/capabilities/sw` is `210` (bit 9, and bit 4 `SW_MICROPHONE_INSERT`, presumably the
-microphone switch on GPIO 86 of [hardware.md](../../docs/hardware.md): not checked). The state comes from the `EVIOCGSW`
+`/sys/class/input/event*/device/capabilities/sw` is `210` (bit 9, and bit 4 `SW_MICROPHONE_INSERT`, the
+microphone switch on GPIO 86 of [hardware.md](../../docs/hardware.md): an application on the device reads its state
+from the same input device). The state comes from the `EVIOCGSW`
 ioctl, a bitmap with one bit per switch code; `lens-cover.py` does both and prints `open` or `closed` (as root):
 
 ```sh

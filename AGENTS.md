@@ -93,6 +93,10 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   (the read-out is upside down on the stand; the sensor cannot flip). libcamera's default 2560x1600 needs `cma=128M` on
   the kernel command line (`CAMERA=1` adds it; a hand install must add it too): with the default 32 MB CMA ask for
   1280x960.
+- Do not offer Volume Up at power-on (the `recovery` partition) as a way back: tried once with a rescue image there,
+  it did not boot. EDL is the tested way back; lk2nd's `fastboot boot` is not tried yet.
+- `verify.sh` needs `systemctl`, `udevadm`, `dmsetup` and `nft` on the build machine (`build.sh` installs them); run on
+  its own without them it stops and names what is missing.
 - More in [docs/known-issues.md](docs/known-issues.md).
 
 ## Before committing
