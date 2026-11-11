@@ -145,14 +145,25 @@
   (2026-11-11). A flashed `CAMERA=1` image of v0.4-rc2 (`WEB=1 AIRPLAY=1`) booted in 13.1 s and 13.2 s (one device,
   2026-11-11). The one slow boot seen after the first camera session points to the CPU clock, not to the camera:
   see [Boot](#boot).
+- No sensor tuning: libcamera 0.7.1 falls back to `uncalibrated.yaml` and warns about missing sensor properties and
+  helper; colours are acceptable (neutral on a white-ish scene), not calibrated.
+- The sensor's flips change the Bayer order and keep the value the last program set (libcamera sets both): a raw
+  capture sets them first ([driver/s5kc505a](../driver/s5kc505a/README.md#capturing-a-raw-frame)). trixie's own
+  libcamera 0.4 does not follow the changing Bayer order (expected to fail at stream start with this driver, from its
+  code, not tried): use 0.7 from trixie-backports, as `CAMERA=1` does.
+- With libcamera 0.7.1, `multifilesink` wrote no file (no error, not investigated); `filesink` works.
+- The lens cover does not cut the sensor's power: software reads the switch before capturing
+  ([lens cover](../driver/s5kc505a/README.md#lens-cover)).
 
 ## Not done yet
 
 - The last seconds of boot time (entropy wait, `check_keys`, sub-partition mapping, `msm-firmware-loader`): they need
   changes to the initramfs or to the firmware loader ([Boot](#boot)).
 - Camera: raw frames work with a patched DTB and an extra module, installed by hand or as a `CAMERA=1` image
-  ([driver/s5kc505a](../driver/s5kc505a/README.md); the image flashed and booted on one device); libcamera 0.4
-  streams full size (2560×1600, 2592×1944) only with `cma=128M` on the kernel command line (`CAMERA=1` adds it; the
-  default 32 MB CMA is enough for 1280×960), no tuning. RPM reports the sensor's VDIG rail
+  ([driver/s5kc505a](../driver/s5kc505a/README.md); an image without the flip controls and libcamera 0.7 flashed and
+  booted on one device, those two then tried by hand there); libcamera 0.7.1 streams full size (2560×1600 at about
+  14 fps, 2592×1944) only with `cma=128M` on the kernel command line (`CAMERA=1` adds it; the default 32 MB CMA is
+  enough for 1280×960), upright and with acceptable colours but no sensor tuning. A program that is not root needs
+  groups `video` and `render`. RPM reports the sensor's VDIG rail
   (L2) at 1.200 V, the PMIC register at 1.175 V: not explained yet.
 - A newer kernel (the image is frozen on 7.1.3).

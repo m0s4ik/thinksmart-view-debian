@@ -5,21 +5,23 @@
 `i2c-qcom-cci`, `s5kc505a` and `qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene
 captured through CAMSS with `v4l2-ctl`, no errors in the kernel log. Boot time unchanged by the camera (24.2 s, 13.8 s
 with v0.4-rc2's command line); one isolated slow boot is still unexplained and its logs point to the CPU clock, not
-to the camera ([known-issues.md](../../docs/known-issues.md#boot)). libcamera 0.4 of Debian trixie streams
-with auto exposure up to 2592x1944 with `cma=128M` on the kernel command line, 1280x960 without it
-([below](#libcamera)); raw frames also at the full 2608x1960. The read-out is upside down, so the DT now says
-`rotation = <180>`; libcamera 0.4 reports it but does not turn the frame. The camera needs a patched DTB, so it is optional:
-`CAMERA=1` in `image/config.env` builds it into the image together with libcamera
-([image/README.md](../../image/README.md#front-camera-optional); such an image flashed and booted on one device,
-2026-11-11: camera DTB and `cma=128M` in use, chip ID at 10.5 s, a raw 1304x980 frame, libcamera at 2560x1600, boot
-13.1 s), or install it by hand as below.
+to the camera ([known-issues.md](../../docs/known-issues.md#boot)). The read-out is upside down on the stand, so the
+DT says `rotation = <180>`, and the driver here has flip controls: libcamera 0.7.1 (trixie-backports) sets both flips
+from that rotation and delivers **upright** frames with plausible colours, debayered on the GPU, about 25 fps at
+1280x960 and 14 fps at 2560x1600 (`cma=128M` on the kernel command line for full size; [below](#libcamera)). Raw
+frames also at the full 2608x1960. The camera needs a patched DTB, so it is optional: `CAMERA=1` in
+`image/config.env` builds it into the image together with libcamera
+([image/README.md](../../image/README.md#front-camera-optional); an image of an earlier commit, with jethac's driver
+without flips and libcamera 0.4, flashed and booted on one device, 2026-11-11: camera DTB and `cma=128M` in use, chip
+ID at 10.5 s, a raw 1304x980 frame, libcamera at 2560x1600, boot 13.1 s; the flip driver, libcamera 0.7.1 and the
+dma_heap rule were then installed by hand on that device), or install it by hand as below.
 
 The ThinkSmart View's front camera is a Samsung **S5KC505A** (5 Mpixel, RAW10 GRBG, 2 CSI-2 lanes at 480 MHz, 24 MHz
 MCLK) on the camera I²C controller (CCI) of the SoC. Two pieces are needed on top of the frozen 7.1.3 kernel:
 
 | File | What |
 |---|---|
-| `s5kc505a.c`, `Makefile` | the sensor driver, built out of tree into `s5kc505a.ko` |
+| `s5kc505a.c`, `Makefile` | the sensor driver (jethac's, with flip controls added), built out of tree into `s5kc505a.ko` |
 | `cd-18781y-front-camera.patch` | patch for `arch/arm64/boot/dts/qcom/apq8053-lenovo-cd-18781y.dts` of msm8953-mainline `v7.1.3-r0`: enables `camss` and `cci`, adds the camera rails and the sensor node |
 | `samsung,s5kc505a.yaml` | the device tree binding (only for `dtbs_check`) |
 | `dtb.sha256` | sha256 of the kernel package's DTB (rebuilt from the unpatched source) and of the camera DTB: CI checks both builds against it, `image/build.sh` and `verify.sh` the files they install |
@@ -61,9 +63,13 @@ Notes:
   the device on its stand (landscape, as it is used) the read-out is **upside down**: raw frames (`media-ctl` and
   `v4l2-ctl`) and libcamera frames alike. So the patch sets `rotation = <180>`. Lenovo's `qcom,mount-angle = <270>` is
   relative to the panel's native portrait orientation (800x1280), an Android convention, and jethac's DT patch has
-  270 too: wrong for landscape. An earlier version of this patch had 0, judged on a dim frame: also wrong. The driver
-  has no `hflip`/`vflip` controls, so nothing is turned in the sensor: consumers turn the image by the rotation
-  property (`camera_sensor_rotation` on the subdevice, libcamera's `Rotation`).
+  270 too: wrong for landscape. An earlier version of this patch had 0, judged on a dim frame: also wrong. The
+  sensor turns the image itself: the driver has `horizontal_flip` and `vertical_flip` (register 0x0101), and
+  libcamera 0.7 sets both from the rotation property (`camera_sensor_rotation` on the subdevice), so its frames are
+  upright. A raw capture sets them by hand ([below](#capturing-a-raw-frame)). The flips change the Bayer order (the
+  read-out window does not move): GRBG without flips, RGGB with `horizontal_flip`, BGGR with `vertical_flip`, GBRG
+  with both (checked on the device for both); the driver reports the current order on its pad, the controls carry
+  `V4L2_CTRL_FLAG_MODIFY_LAYOUT` and cannot change while streaming.
 - Measured on the device: RPM reports L2 at 1.200 V, the PMIC's own register (read through the SPMI regulator
   driver) at **1.175 V**. Lower than requested, so on the safe side; why they differ is not known yet.
 - Power-up order in the driver (from the Lenovo library): reset and standby low, VANA, VDIG, VIO, MCLK, reset high,
@@ -150,26 +156,34 @@ does not reboot, and there is no watchdog). A hang before that unit runs would s
 ## Capturing a raw frame
 
 `apt install v4l-utils`. CAMSS path: sensor → `msm_csiphy0` → `msm_csid0` → `msm_ispif0` → `msm_vfe0_rdi0` →
-video node `msm_vfe0_video0`, `SGRBG10_1X10` on every pad, `pgAA` (packed RAW10) in memory. Modes: 2608x1960,
-1936x1096, 1304x980 (binned), 1296x736.
+video node `msm_vfe0_video0`, the sensor's Bayer order on every pad, packed RAW10 in memory. Modes: 2608x1960,
+1936x1096, 1304x980 (binned), 1296x736. Set the flips first: they decide the Bayer order, which every pad and the
+video node must match (CAMSS checks the formats of the links when streaming starts). With both flips the frame is
+upright on the stand and GBRG (`SGBRG10_1X10`, `pGAA`):
 
 ```sh
 MD=$(for m in /dev/media*; do media-ctl -d "$m" -p 2>/dev/null | grep -q msm_vfe0_rdi0 && echo "$m"; done | head -n 1)
 SENSOR=$(media-ctl -d "$MD" -p | sed -n 's/.*: \(s5kc505a [0-9]*-0037\).*/\1/p')
-W=1304 H=980 F=SGRBG10_1X10
+SD=$(media-ctl -d "$MD" -e "$SENSOR")
+v4l2-ctl -d "$SD" -c horizontal_flip=1,vertical_flip=1
+W=1304 H=980 F=SGBRG10_1X10
 media-ctl -d "$MD" -r
 media-ctl -d "$MD" -l '"msm_csiphy0":1->"msm_csid0":0[1],"msm_csid0":1->"msm_ispif0":0[1],"msm_ispif0":1->"msm_vfe0_rdi0":0[1]'
 media-ctl -d "$MD" -V "\"$SENSOR\":0[fmt:$F/${W}x$H],\"msm_csiphy0\":0[fmt:$F/${W}x$H],\"msm_csid0\":0[fmt:$F/${W}x$H],\"msm_ispif0\":0[fmt:$F/${W}x$H],\"msm_vfe0_rdi0\":0[fmt:$F/${W}x$H]"
-v4l2-ctl -d "$(media-ctl -d "$MD" -e "$SENSOR")" -c test_pattern=2          # colour bars; 0 = the real image
-v4l2-ctl -d "$(media-ctl -d "$MD" -e msm_vfe0_video0)" --set-fmt-video=width=$W,height=$H,pixelformat=pgAA \
+v4l2-ctl -d "$SD" -c test_pattern=0          # 2 = colour bars
+v4l2-ctl -d "$(media-ctl -d "$MD" -e msm_vfe0_video0)" --set-fmt-video=width=$W,height=$H,pixelformat=pGAA \
 	--stream-mmap --stream-skip=4 --stream-count=1 --stream-to=/run/frame.raw
-python3 raw10-to-png.py /run/frame.raw $W $H /run/frame.png    # 652x490, turned 180°: upright on the stand
+python3 raw10-to-png.py /run/frame.raw $W $H /run/frame.png --bayer gbrg    # 652x490, upright
 ```
+
+Without flips (`horizontal_flip=0,vertical_flip=0`): `F=SGRBG10_1X10`, `pixelformat=pgAA`, and `raw10-to-png.py
+… --rotation 180` (GRBG is its default). The controls keep the value the last program set (libcamera sets both to
+1), so set them before every raw capture; `v4l2-ctl -d "$SD" -l` shows them.
 
 A 1304x980 frame is 1,599,360 bytes (1632 bytes per line). **Full resolution** works the same way with
 `W=2608 H=1960`: a 6,397,440-byte frame (3264 bytes per line), which `raw10-to-png.py` turns into a 1304x980 PNG (it
 makes one RGB pixel of each 2x2 block). Raw capture uses no CMA (`v4l2-ctl` buffers are scatter-gather), so it needs
-no `cma=`. The sensor subdevice has `exposure` (lines; in the
+no `cma=`. The sensor subdevice has `horizontal_flip`, `vertical_flip`, `exposure` (lines; in the
 1304x980 mode the default is already 2000 and the maximum 2022 at 30 fps; longer needs a larger
 `vertical_blanking`), `analogue_gain` (32 = 1x … 511) and `vertical_blanking`. In a room in half-light
 `analogue_gain=256` (8x) at the default exposure gives a recognisable but dark image (mean green about 1 % of full
@@ -195,39 +209,56 @@ device, for an application that wants to react instead of polling.
 
 ## libcamera
 
-Debian trixie's own **0.4.0** works (one device, 2026-11-11; trixie-backports' 0.7.1 not tried):
+**libcamera 0.7.1 of trixie-backports** works (one device, 2026-11-11, installed by hand as below; `CAMERA=1`
+installs the same packages):
 
 ```sh
-apt install --no-install-recommends libcamera0.4 libcamera-ipa gstreamer1.0-libcamera gstreamer1.0-tools   # no Debian Mesa
-apt install --no-install-recommends gstreamer1.0-plugins-base gstreamer1.0-plugins-good   # videoconvert, videoflip, multifilesink
-gst-launch-1.0 libcamerasrc ! video/x-raw,width=1280,height=960 ! videoconvert ! video/x-raw,format=RGB ! \
-	multifilesink location=/run/lc.raw max-files=1 next-file=buffer      # as root; 3,686,400-byte RGB frames
+# trixie-backports in /etc/apt/sources.list.d/ first (image/README.md#front-camera-optional); no Debian Mesa
+apt install --no-install-recommends libcamera0.7/trixie-backports libcamera-ipa/trixie-backports \
+	gstreamer1.0-libcamera/trixie-backports gstreamer1.0-tools
+timeout -s INT 6 gst-launch-1.0 -e libcamerasrc ! video/x-raw,width=1280,height=960,format=RGBA ! \
+	filesink location=/run/frames.rgba      # 4,915,200-byte RGBA frames one after the other: take the last one
+gst-launch-1.0 libcamerasrc ! video/x-raw,width=2560,height=1600 ! fakesink num-buffers=60   # timing
 ```
 
-The `simple` pipeline handler with the software ISP (`ipa_soft_simple`) picks up `qcom-camss`; dma-buf memory comes
-from `/dev/dma_heap/reserved` (CMA, root only). Auto exposure works (exposure 4-2022 lines, gain 0-511), colours are
-plausible with a slight green cast. With `cma=128M` on the kernel command line (`CAMERA=1` images have it; by hand:
-[Installing](#installing)) **2560x1600 (the default) and 2592x1944 stream** too: 60 buffers of 2560x1600 to an RGB
-file in 5.6 s, about 10.6 fps with the software ISP on the CPU; 1280x960 and 640x480 stream either way. Warnings:
-no static sensor properties, no `s5kc505a.yaml` tuning (falls back to `uncalibrated.yaml`), no camera sensor helper,
-no sensor delays.
+The `simple` pipeline handler with the software ISP (`ipa_soft_simple`) picks up `qcom-camss` and debayers **on the
+GPU** (EGL on freedreno, i.e. `mesa-freedreno`; the log says `EGL_VENDOR: Mesa Project`). From the DT's
+`rotation = <180>` it sets both sensor flips, so the frame is **upright** (sensor format `SGBRG10_1X10`, ISP input
+`1304x980-GBRG-10-CSI2P`). Auto exposure works (exposure 4-2022 lines, gain 0-511), and colours look
+neutral without tuning (mean R/G/B 133/141/136 on a white-ish scene). Measured: 30 buffers of 1280x960 in 1.18 s
+(about 25 fps), 30 of 2560x1600 in 2.1 s and 60 in 3.9 s (about 14 fps); full size uses about 80 MB of the 128 MB
+CMA while streaming. Warnings that remain: no static sensor properties, no `s5kc505a.yaml` tuning (falls back to
+`uncalibrated.yaml`), no camera sensor helper.
 
+- **Without root**: dma-buf memory comes from `/dev/dma_heap/*`, `root:root 0600` by default. The udev rule
+  `SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"` (`CAMERA=1` installs it as
+  `/etc/udev/rules.d/70-camera-dma-heap.rules`) gives them to group `video`, which already has the media, video and
+  sensor nodes. The GPU debayer also needs group `render` (`/dev/dri/renderD128`): with `video` only, libcamera fails
+  with `eglInitialize fail` and "Failed to start the camera: No such device". So a service that uses the camera
+  wants `SupplementaryGroups=video render` (tried: a user without privileges in both groups streams 2560x1600).
 - **Without `cma=`** the kernel reserves 32 MB, and full size fails: `dma-heap allocation failure`, kernel `cma: ...
   alloc failed, req-size: 3000 pages, ret: -16`; ask for 1280x960 then. With `cma=128M` the kernel logs `cma:
   Reserved 128 MiB` (`CmaTotal: 131072 kB` in `/proc/meminfo`); boot time is unchanged and so, in practice, is
   `MemAvailable`, since the kernel lends free CMA pages to movable allocations until a driver needs them. 64M and 96M
   are not tried.
-- With `rotation = <180>` in the DT the frames of `libcamerasrc` 0.4 are still upside down (the sensor has no flip
-  controls): add `videoflip method=rotate-180` after `videoconvert` (`gstreamer1.0-plugins-good`).
-- `CAMERA=1` installs the first line (15 packages, ~45 MB on the plain image), not the second: GStreamer's base and
-  good plugins pull X11 libraries, cairo, PulseAudio and more (+93 packages, ~110 MB; no Mesa). On a device that
-  already has them (`AIRPLAY=1`) the pipeline above works as it is.
+- `multifilesink location=… max-files=1 next-file=buffer` wrote nothing with 0.7.1 (no error; not investigated):
+  use `filesink` as above. `libcamerasrc` has no `num-buffers`; `fakesink num-buffers=N` ends the pipeline.
+- **trixie's own 0.4.0** debayers on the CPU (about 10.6 fps at 2560x1600, a slight green cast) and does not use the
+  flips: with jethac's driver without flip controls its frames are upside down (`videoflip method=rotate-180` turns
+  them). With this driver it would have to follow the Bayer order that changes with the flips, which 0.4's `simple`
+  pipeline does not do for the video node: expected to fail at stream start (from reading its code, not tried). Use
+  0.7.
+- `CAMERA=1` installs the packages above (20 with their dependencies), not `gstreamer1.0-plugins-base` or `-good`
+  (`videoconvert`, `videoflip`, `multifilesink`): they pull X11 libraries, cairo, PulseAudio and more (+93 packages,
+  ~110 MB; no Mesa). On a device that already has them (`AIRPLAY=1`) they are there.
 
 ## Credits and licence
 
 The driver is **jethac's** ([jethac/lenovo-thinksmart-view](https://github.com/jethac/lenovo-thinksmart-view),
 commit `fe9c0a58`, `kernel/patches/0402-media-i2c-add-samsung-s5kc505a-sensor-driver.patch` plus `0404`, by Jetha
-Chan), unchanged: `s5kc505a.c` is the file those two patches create (sha256 `d044ecca…07946fe25`). It is
+Chan). `s5kc505a.c` started as the file those two patches create (sha256 `d044ecca…07946fe25`); this repository adds
+the horizontal and vertical flip controls (register 0x0101) with the Bayer order that follows them, so that libcamera
+can turn the upside-down read-out in the sensor (`git log driver/s5kc505a/s5kc505a.c` has the change). It is
 **GPL-2.0-only** like the other drivers here (header `SPDX-License-Identifier: GPL-2.0`); the binding
 (`0401`) is `GPL-2.0-only OR BSD-2-Clause`. The device tree patch follows jethac's `0403`, rewritten for the 7.1.3
 source (the original does not apply to it) and with `rotation = <180>` instead of 270; the device tree source itself is BSD-3-Clause. Register tables, I²C

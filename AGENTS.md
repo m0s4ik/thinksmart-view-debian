@@ -40,7 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
-| `driver/s5kc505a/` | optional front camera: jethac's sensor driver (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env` (flashed and booted on one device), or by hand |
+| `driver/s5kc505a/` | optional front camera: jethac's sensor driver with our flip controls (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env` (flashed and booted on one device), or by hand |
 
 ## Commands and the checks that must pass
 
@@ -90,9 +90,11 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   there is no watchdog, so a hang needs someone at the device. Never put `fdt` next to `fdtdir` (fdtdir wins) and never
   name a DTB that is not in `/boot` (no boot); `build.sh` refuses a camera DTB other than the one in
   `driver/s5kc505a/dtb.sha256`: rebuild it; the sum changes only together with the patch. The DT says `rotation = <180>`
-  (the read-out is upside down on the stand; the sensor cannot flip). libcamera's default 2560x1600 needs `cma=128M` on
-  the kernel command line (`CAMERA=1` adds it; a hand install must add it too): with the default 32 MB CMA ask for
-  1280x960.
+  (the read-out is upside down on the stand); libcamera 0.7 (trixie-backports) turns it with the sensor's flips, which
+  change the Bayer order: trixie's 0.4 cannot follow that, do not install it. A raw capture sets the flips first
+  (they keep the last program's value). libcamera's default 2560x1600 needs `cma=128M` on the kernel command line
+  (`CAMERA=1` adds it; a hand install must add it too): with the default 32 MB CMA ask for 1280x960. Without root:
+  groups `video` (with the `dma_heap` udev rule) and `render`.
 - Do not offer Volume Up at power-on (the `recovery` partition) as a way back: tried once with a rescue image there,
   it did not boot. EDL is the tested way back; lk2nd's `fastboot boot` is not tried yet.
 - `verify.sh` needs `systemctl`, `udevadm`, `dmsetup` and `nft` on the build machine (`build.sh` installs them); run on
