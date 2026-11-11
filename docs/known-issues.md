@@ -36,10 +36,35 @@
 
 ## Boot
 
-- **10 s lost in the initramfs**: the postmarketOS initramfs waits up to 10 s for `/dev/fb0`, but the panel module is
-  not in it. Possible fix without touching the original file: append a second cpio archive to `/boot/initramfs` with
-  `etc/deviceinfo` containing `deviceinfo_no_framebuffer="true"` (the kernel reads concatenated archives in order).
-  Untested; a broken initramfs needs EDL to recover.
+- **Boot time**: about 14 s (`systemd-analyze`). Until v0.4-rc1 the postmarketOS initramfs lost 10 s waiting for
+  `/dev/fb0`, which cannot appear there (no modules in it); since v0.4-rc2 `deviceinfo_no_framebuffer=true` on the
+  kernel command line skips the wait, with no change to the initramfs ([boot.md](boot.md#kernel-command-line)). The
+  largest pieces left are in files the image takes as they are: ~2 s before the initramfs's udev starts (it ends at
+  `random: crng init done`), `check_keys` (~1 s, a `sleep 1`), the sub-partition mapping (~1 s), and
+  `msm-firmware-loader.service` (2.5 s, ordered before udev, so hardware probing waits for it). Not planned yet;
+  timeline in [boot.md](boot.md#boot-time).
+- **Open: one slow boot (85 s), seen once in more than eight boots and not reproduced.** Compared with the journals
+  of normal boots (kernel timestamps), it is identical up to ~0.95 s; from there the CPU was slow: steps bound by the
+  CPU took 18-27 times longer, those bound by I/O ~1.5 times, and only in that boot systemd logged more than a second
+  of CPU time for trivial units (`modprobe@configfs.service: Consumed 1.296s CPU time`). 8 CPUs online, as in the
+  other boots; no thermal or throttling messages (temperatures are never logged). The first difference: `cpufreq-dt`
+  came online (0.952 s) before the late initcalls `clk: Disabling unused clocks` and `PM: genpd: Disabling unused
+  power domains` (1.008 s); in the six normal 7.1.3 boots it is the other way round (unused clocks off at ~0.87 s,
+  cpufreq at 0.96-0.98 s). One older normal boot had the same order as the slow one with only a ~0.3 s hiccup, so the
+  order alone does not explain it. Speed came back abruptly at 81.555 s, at `remoteproc0: adsp is available`; nothing
+  in the log says what changed. Most likely a probe-order race between cpufreq-dt/CPR and the clean-up of unused
+  clocks and power domains that left the CPUs clocked from a slow source: not proven. Not related, as far as the logs
+  show: the camera DTB's `rotation`, `kernel.panic` set at run time, `modprobe -i`. It came right after the first
+  camera session (captures, then a warm reboot), which cannot be excluded, but two reboots after captures were
+  normal. Side effect: the `/boot` device came up after the 15 s `x-systemd.device-timeout` of fstab and `/boot` was
+  not mounted (`systemctl start boot.mount` mounts it once the device is there); since v0.4-rc2 the timeout is 90 s
+  (on an older device edit `/etc/fstab` as in [image/README.md](../image/README.md#after-the-first-boot)).
+  **If it happens again** (`systemd-analyze` far above 14 s), keep the journal (it is on disk) and, from the same
+  boot: the order of `cpufreq_policy_online`/`cpufreq-dt` against `Disabling unused clocks` in `dmesg`; and, if it
+  is still slow when ssh answers (in the one slow boot speed came back at 81.5 s, shortly before the end),
+  `cpuinfo_cur_freq` against `scaling_cur_freq` in `/sys/devices/system/cpu/cpu*/cpufreq/`, the lines of the CPU
+  clocks in `/sys/kernel/debug/clk/clk_summary` (`mount -t debugfs none /sys/kernel/debug`) and
+  `/sys/class/thermal/thermal_zone*/temp`.
 - lk2nd supports a **single entry** in `extlinux.conf`.
 - `kernel.panic` is 0 and there is no watchdog device: after a kernel panic the device stays stopped until the power
   is cut.
@@ -111,19 +136,15 @@
 
 ## Camera
 
-- With the camera installed (modules loaded by udev) the device boots in **24.2 s**, as without it, also right after
-  a capture and a warm reboot (measured twice, 2026-11-10).
-- **Open: one slow boot (85 s), seen once and not reproduced.** It came right after the first camera session (modules
-  loaded by hand, three captures, warm reboot): everything was 3-17 times slower from about the first second of the
-  kernel, before any module or user space ran, and back to normal speed right after `qcom-camss` probed (~80 s). No
-  interrupt storm, normal temperatures, no kernel errors. The cause is not known. Side effect: the `/boot` device came
-  up after the 15 s `x-systemd.device-timeout` of fstab, so `/boot` was not mounted in that boot (`systemctl start
-  boot.mount` mounts it once the device is there). Since v0.4-rc2 the timeout is 90 s (a device changed by hand
-  booted fine with it; edit `/etc/fstab` as in [image/README.md](../image/README.md#after-the-first-boot)).
+- With the camera installed (modules loaded by udev) the device boots as fast as without it: 24.2 s, also right after
+  a capture and a warm reboot (measured twice, 2026-11-10), and 13.8 s with the kernel command line of v0.4-rc2
+  (2026-11-11). The one slow boot seen after the first camera session points to the CPU clock, not to the camera:
+  see [Boot](#boot).
 
 ## Not done yet
 
-- Faster boot (initramfs framebuffer wait).
+- The last seconds of boot time (entropy wait, `check_keys`, sub-partition mapping, `msm-firmware-loader`): they need
+  changes to the initramfs or to the firmware loader ([Boot](#boot)).
 - Camera in the image: raw frames work with a patched DTB and an extra module, installed by hand
   ([driver/s5kc505a](../driver/s5kc505a/README.md)); a `CAMERA=1` image has not been flashed yet; libcamera 0.4
   streams full size (2560×1600, 2592×1944) only with `cma=128M` on the kernel command line (`CAMERA=1` adds it; the

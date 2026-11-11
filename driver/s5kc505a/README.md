@@ -3,8 +3,9 @@
 **Status: raw frames work on the 7.1.3 kernel of this system** (one device, 2026-11-10): installed as below (module in
 `extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`; `cma=128M` since 2026-11-11), udev loads
 `i2c-qcom-cci`, `s5kc505a` and `qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene
-captured through CAMSS with `v4l2-ctl`, no errors in the kernel log. Boot time unchanged (24.2 s); one isolated slow
-boot is still unexplained ([known-issues.md](../../docs/known-issues.md#camera)). libcamera 0.4 of Debian trixie streams
+captured through CAMSS with `v4l2-ctl`, no errors in the kernel log. Boot time unchanged by the camera (24.2 s, 13.8 s
+with v0.4-rc2's command line); one isolated slow boot is still unexplained and its logs point to the CPU clock, not
+to the camera ([known-issues.md](../../docs/known-issues.md#boot)). libcamera 0.4 of Debian trixie streams
 with auto exposure up to 2592x1944 with `cma=128M` on the kernel command line, 1280x960 without it
 ([below](#libcamera)); raw frames also at the full 2608x1960. The read-out is upside down, so the DT now says
 `rotation = <180>`; libcamera 0.4 reports it but does not turn the frame. The camera needs a patched DTB, so it is optional:

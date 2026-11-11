@@ -46,8 +46,8 @@ memory) with `media-ctl`/`v4l2-ctl`, no errors in the kernel log. Everything is 
   full 2608×1960 too ([driver README](../driver/s5kc505a/README.md#libcamera)).
 - **Open**: RPM reports L2 at 1.200 V, the PMIC register at 1.175 V; `libcamerasrc` 0.4 does not turn the
   frame by the DT's `rotation = <180>` (the application has to); no sensor tuning, so colours are only a guess (raw: grey world;
-  libcamera: `uncalibrated.yaml`, slight green cast). One slow boot (85 s) seen once after the first camera session, not reproduced
-  ([known-issues.md](known-issues.md#camera)).
+  libcamera: `uncalibrated.yaml`, slight green cast). One slow boot (85 s) came once after the first camera session;
+  its logs point to the CPU clock, not to the camera ([known-issues.md](known-issues.md#boot)).
 - Realistic uses: presence detection at 1304×980 binned, snapshots on request; the lens cover (GPIO 87) does not cut
   the sensor's power, so software has to check it (`driver/s5kc505a/lens-cover.py`, [driver README](../driver/s5kc505a/README.md#lens-cover)).
 
