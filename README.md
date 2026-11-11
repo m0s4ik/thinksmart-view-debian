@@ -73,7 +73,7 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
 
 > [!IMPORTANT]
 > **Release candidate.** v0.4 adds the front camera as an option. A `CAMERA=1` image (`WEB=1 AIRPLAY=1 CAMERA=1`) has
-> been flashed and booted on one device: no failed units, the camera DTB and `cma=128M` in use, the sensor found,
+> been flashed and booted on a device: no failed units, the camera DTB and `cma=128M` in use, the sensor found,
 > raw frames and libcamera at 2560×1600, boot in 13.1 s. With `CAMERA=0` (the default) the image is the same as v0.3
 > (same packages and sizes on test builds) apart from the faster boot and the longer `/boot` timeout of rc2.
 
@@ -160,7 +160,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Faster boot: no initramfs framebuffer wait, 24 s → 14 s (v0.4-rc2)
 - [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
 - [x] Front camera (S5KC505A): raw frames and libcamera 0.4 at 1280×960, optional (patched DTB)
-- [x] Camera in the image: `CAMERA=1` (v0.4-rc1; flashed and booted on one device with rc2)
+- [x] Camera in the image: `CAMERA=1` (v0.4-rc1; flashed and booted with rc2)
 - [x] libcamera at full size (`cma=128M`, v0.4-rc2)
 - [ ] Camera sensor tuning
 - [ ] FT8201 panel variant
