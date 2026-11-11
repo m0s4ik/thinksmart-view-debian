@@ -184,8 +184,8 @@ ioctl, a bitmap with one bit per switch code; `lens-cover.py` does both and prin
 python3 lens-cover.py          # open (exit 0) / closed (exit 1)
 ```
 
-Bit 9 read 0 with the cover open; the closed state has **not been checked yet** (it needs someone at the device), so
-the script follows the kernel's meaning (1 = covered) until then. Changes also arrive as `EV_SW` events on the same
+Checked on the device: bit 9 reads 0 with the cover open and 1 with it closed (the kernel's meaning, 1 = covered).
+The sensor keeps streaming with the cover closed (a dark frame). Changes also arrive as `EV_SW` events on the same
 device, for an application that wants to react instead of polling.
 
 ## libcamera

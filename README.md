@@ -94,8 +94,8 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
   instead of 32 MB; boot time and free memory unchanged in practice), and 2560×1600 and 2592×1944 stream, about
   10 fps with the software ISP. Raw frames at the full 2608×1960 work too
   ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera)). *(rc2)*
-- **Lens cover**: `driver/s5kc505a/lens-cover.py` prints whether the cover is open or closed (the closed state is not
-  checked on a device yet; [driver/s5kc505a](driver/s5kc505a/README.md#lens-cover)). *(rc2)*
+- **Lens cover**: `driver/s5kc505a/lens-cover.py` prints whether the cover is open or closed
+  ([driver/s5kc505a](driver/s5kc505a/README.md#lens-cover)). *(rc2)*
 - **`/boot` device timeout 90 s** instead of 15 s, on every image: in one slow boot the device came up after 15 s and
   `/boot` was left unmounted ([docs/boot.md](docs/boot.md)). *(rc2)*
 - Known: no sensor tuning (slight green cast), `libcamerasrc` does not turn the frame, the lens
