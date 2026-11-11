@@ -90,7 +90,7 @@ AIRPLAY_BAD_PLUGINS="libgstvideoparsersbad.so libgstunixfd.so"
 # CAMERA=1: libcamera 0.7 from trixie-backports with the simple pipeline handler and its software ISP (ipa_soft_simple,
 # for qcom-camss; debayering on the GPU through EGL, i.e. mesa-freedreno), GStreamer's libcamerasrc and gst-launch-1.0
 # (GStreamer core only: 20 packages). trixie's own 0.4 debayers on the CPU and cannot follow the sensor's flips (the
-# Bayer order changes with them), so its frames stay upside down. CAMERA_BACKPORTS come from trixie-backports, their
+# Bayer order changes with them; driver/s5kc505a/README.md#libcamera). CAMERA_BACKPORTS come from trixie-backports, their
 # dependencies from trixie (no Debian Mesa); the image keeps the trixie-backports source with Debian's default
 # priority, so apt upgrades these packages there and takes nothing else from it. Not gstreamer1.0-plugins-base
 # (videoconvert) or -good: they pull X11 libraries, cairo, PulseAudio, ... (+24 and +93 packages); apt install them on

@@ -6,8 +6,8 @@
 # Opens the image read-only through loop devices and checks: size, MBR, p1 features (lk2nd), UUIDs in extlinux.conf
 # and fstab, deviceinfo_no_framebuffer=true on the kernel command line (no 10 s wait for fb0 in the initramfs), the
 # TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile, Python and the ALSA
-# configuration (through qemu); the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
-# EGL and GBM loaded through qemu) and the web layer when /etc/thinksmart-version says it is on. Front camera
+# configuration (through qemu); the boot report; the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
+# EGL and GBM loaded through qemu); the web layer and the AirPlay runtime, on or off. Front camera
 # (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, `cma=` on the command
 # line, the DTBs, the module, libcamera 0.7 from trixie-backports with its software ISP and libcamerasrc (loaded through
 # qemu, libcamera linked to libglvnd's EGL and GLES for the GPU debayer), the trixie-backports source, the dma_heap udev
