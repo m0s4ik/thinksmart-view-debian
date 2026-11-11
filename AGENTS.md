@@ -74,6 +74,10 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   volume). Rebuild it; `ALLOW_OLD_TAS5782M=1` only if the person asks.
 - Install only `snd-soc-tas5782m.ko` in `extra/`, never the `-dbg` module (same aliases).
 - lk2nd reads a **single entry** in `extlinux.conf`; the boot partition is ext2 with 1 KiB blocks: do not "fix" it.
+- The `append` line ends with `deviceinfo_no_framebuffer=true` (then `cma=128M` with `CAMERA=1`): it saves the
+  initramfs's 10 s wait for `/dev/fb0`, keep it. A broken `append` line means no root file system and someone at the
+  device: change `extlinux.conf` only by writing a new file and checking it first
+  ([image/README.md](image/README.md#after-the-first-boot)), and ask before rebooting.
 - `SYSTEM_SECTORS` must equal the `system` partition size after repartitioning, or the image does not fit / boot.
 - The USB-C port has no CC resistors: if EDL does not see the device, suggest a USB-A to USB-C cable.
 - Mesa lives in `/usr` as the package `mesa-freedreno`, which provides `libgbm1`, `libegl-mesa0` and `libglx-mesa0`:

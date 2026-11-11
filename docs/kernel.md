@@ -95,7 +95,8 @@ The initramfs (postmarketOS 3.7.2, from the 7.1.3 package):
 - **does not move `/run`** into the new root: Debian starts without the initramfs udev database, which is why the
   image needs `54-dm-initramfs.rules` ([boot.md](boot.md));
 - loads no modules (ext4, dm and mmc are built in);
-- waits up to 10 s for `/dev/fb0`, which never comes (the panel driver is not in the initramfs): see
-  [known-issues.md](known-issues.md).
+- waits up to 10 s for `/dev/fb0`, which never comes (the panel driver is not in the initramfs), unless
+  `deviceinfo_no_framebuffer=true` is on the kernel command line: the image puts it there since v0.4-rc2
+  ([boot.md](boot.md#kernel-command-line)).
 
 The kernel has everything systemd needs (cgroups, `FHANDLE`, `DEVTMPFS`, `AUTOFS`, seccomp, BPF).

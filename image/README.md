@@ -175,7 +175,8 @@ in_chroot systemctl enable my-app
 
 ## What `verify.sh` checks
 
-Size and MBR; p1 features (lk2nd); `e2fsck -fn` of both partitions; UUIDs in `extlinux.conf` and `fstab`; `/boot`
+Size and MBR; p1 features (lk2nd); `e2fsck -fn` of both partitions; UUIDs in `extlinux.conf` and `fstab`;
+`deviceinfo_no_framebuffer=true` once on the `append` line (also in `extlinux.conf.nocamera`); `/boot`
 with `nofail` and a 90 s device timeout; `dmsetup` and the device-mapper udev rules (`udevadm verify`); `systemd-gpt-auto-generator` disabled;
 no unit requires `local-fs.target` or `/boot`; a **test device-mapper on p1** run through `udevadm test --action=add`
 in a mount namespace with the image's rules and an empty `/run/udev` (it must get `/dev/disk/by-uuid/<p1>` and not
@@ -188,7 +189,7 @@ GL libraries through qemu. Web layer: on (WPE ≥ 2.54, bubblewrap, user namespa
 processes) or off (no WebKit or bubblewrap). AirPlay runtime: on (its packages, the GStreamer plugins UxPlay's
 pipelines use, `ldd` of libplist, `libdns_sd` and the plugins) or off (no GStreamer at all when the web layer is off
 too). Front camera (found from `extlinux.conf`, the module or the camera DTB): no `fdtdir`, exactly one `fdt` naming
-the camera DTB, `cma=128M` once on the `append` line, that file in `/boot`, the original DTB still there, both DTBs as pinned in
+the camera DTB, `cma=128M` once on the `append` line and after `deviceinfo_no_framebuffer=true`, that file in `/boot`, the original DTB still there, both DTBs as pinned in
 `driver/s5kc505a/dtb.sha256`, `extlinux.conf.nocamera` (with `fdtdir /` and no `cma=`), the module's vermagic, `modules.dep` and `modules.alias`,
 `v4l-utils`, the libcamera packages, `ipa_soft_simple.so` with its signature and `soft_ipa_proxy`, no Debian Mesa,
 `ldd` of libcamera, the IPA and the GStreamer plugin and `gst-inspect-1.0 libcamerasrc` through qemu; without it,
@@ -213,9 +214,33 @@ the camera DTB, `cma=128M` once on the `append` line, that file in `/boot`, the 
   module and the camera DTB by hand as in [driver/s5kc505a](../driver/s5kc505a/README.md#installing) (that page also
   says how to go back), then `apt install --no-install-recommends v4l-utils` and the packages of `CAMERA_PACKAGES`
   in `build.sh` (libcamera).
-- From v0.4-rc1 to v0.4-rc2 without reflashing (both done by hand on a device): the longer `/boot` timeout, on every
+- From v0.4-rc1 to v0.4-rc2 without reflashing (all three done by hand on a device): the longer `/boot` timeout, on every
   device, then `systemctl daemon-reload`:
   `sed -i 's/x-systemd.device-timeout=15/x-systemd.device-timeout=90/' /etc/fstab`. With the camera, `cma=128M` on
   the kernel command line for libcamera at full size, then reboot (keep `extlinux.conf.nocamera` without it):
   `grep -q ' cma=' /boot/extlinux/extlinux.conf || sed -i '/^[[:space:]]*append /s/$/ cma=128M/' /boot/extlinux/extlinux.conf`.
   `cat /proc/cmdline` shows it after the reboot, `grep CmaTotal /proc/meminfo` says 131072 kB.
+  The faster boot of rc2, on every device (done by hand on a device: 24.2 s → 13.8 s): `deviceinfo_no_framebuffer=true`
+  at the end of the `append` line. A broken `append` line (a cut line, a lost UUID) means the initramfs does not find
+  the root file system and someone has to recover the device over USB: lk2nd's `fastboot boot` of a copy of the old
+  `/boot` (copy it to another machine first; the recipe is in
+  [driver/s5kc505a](../driver/s5kc505a/README.md#trying-it-without-writing-to-the-device-not-tried-yet), not tried on
+  a device yet) or p1 rewritten over EDL ([docs/flashing.md](../docs/flashing.md#seeing-why-an-image-does-not-boot)).
+  So do not edit the file in place: write a new one, check it, then move it over the old one (the order of `cma=` and
+  the new parameter does not matter):
+
+  ```sh
+  cd /boot/extlinux
+  grep -q deviceinfo_no_framebuffer extlinux.conf && echo "already there: stop here"
+  sed '/^[[:space:]]*append /s/$/ deviceinfo_no_framebuffer=true/' extlinux.conf > extlinux.conf.new && sync
+  wc -l extlinux.conf extlinux.conf.new     # the same number of lines
+  diff extlinux.conf extlinux.conf.new      # exactly one changed line: the append line, now ending with the parameter
+  # only if both checks are right:
+  mv extlinux.conf.new extlinux.conf && sync
+  systemctl reboot
+  ```
+
+  After the reboot `journalctl -b | grep -i framebuffer` shows the initramfs's `NOTE: Skipping framebuffer setup
+  (deviceinfo_no_framebuffer)` instead of `ERROR: /dev/fb0 did not appear after waiting 10 seconds!`, and
+  `systemd-analyze` says about 14 s. `extlinux.conf.nocamera`, if there is one, can get the same change the same way
+  (the images of rc2 have it there too).

@@ -37,12 +37,13 @@ application:
 | 🪶 **~190 MB of RAM** | used by the whole system, kernel included, with no application running: ~1.7 GB left for yours |
 | 📦 **~220 Debian packages** | ~470 MB on disk with kernel modules and GPU drivers; the compressed image is ~185 MB |
 | ⚙️ **A handful of services** | systemd, journald, udev, NetworkManager, wpa_supplicant, ssh, timesyncd, nftables, avahi (mDNS), plus the audio and light sensor setup. No desktop, no display server, no browser |
-| ⏱️ **~24 s boot** | from power on to ssh (16 s kernel and initramfs, 7 s userspace) |
+| ⏱️ **~14 s boot** | 6 s kernel and initramfs, 8 s userspace (`systemd-analyze`; 24 s before v0.4-rc2) |
 | 🎮 **GPU without the weight** | Mesa built for this GPU only and without LLVM: ~22 MB instead of the ~170 MB of Debian's Mesa |
 | 🧱 **Plain Debian** | apt and Debian's security updates, systemd, nothing custom to learn; the whole image comes from one script you can read |
 
-<sub>RAM and boot time measured on our device on 2026-11-04, right after flashing v0.1, with no application running
-(the picture above; v0.1 had 208 packages, before avahi). Packages and disk: a test build of v0.3-rc3 with the
+<sub>RAM measured on our device on 2026-11-04, right after flashing v0.1, with no application running (the picture
+above; v0.1 had 208 packages, before avahi). Boot time: the same device on 2026-11-11, with v0.4-rc2's kernel command
+line. Packages and disk: a test build of v0.3-rc3 with the
 optional layers off.</sub>
 
 ## What works
@@ -62,7 +63,7 @@ optional layers off.</sub>
 | 🧭 **Sensors and keys** | BMA253 accelerometer (rotation), VCNL4200 ambient light and proximity, Vol+ / Vol− keys, camera shutter switch |
 | 🔒 **Access** | ssh with keys only, nftables firewall open only to your LAN |
 | 🌙 **Suspend** | `systemctl suspend`: under 0.5 W, Vol+ / Vol− or an RTC alarm wake it |
-| 🚀 **Headless boot** | ready in ~25 s, survives without a keyboard (no emergency-mode dead ends) |
+| 🚀 **Headless boot** | ready in ~14 s, survives without a keyboard (no emergency-mode dead ends) |
 | 🧩 **Your app on top** | a customization hook adds your application to the image at build time |
 
 Not yet: camera tuning. `poweroff` does not stay off with the power supply plugged in (use suspend, or `systemctl
@@ -74,8 +75,12 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
 > **Release candidate.** v0.4 adds the front camera as an option. It works on a device installed by hand (same
 > module, DTB and kernel command line), and `CAMERA=1` images build and pass `verify.sh`, but a `CAMERA=1` image has
 > **not been flashed and booted on a device yet**. With `CAMERA=0` (the default) the image is the same as v0.3 (same
-> packages and sizes on test builds) apart from the longer `/boot` timeout of rc2.
+> packages and sizes on test builds) apart from the faster boot and the longer `/boot` timeout of rc2.
 
+- **Faster boot, 24 s → 14 s**, on every image: `deviceinfo_no_framebuffer=true` on the kernel command line stops
+  the postmarketOS initramfs from waiting 10 s for a framebuffer that cannot appear there. Nothing else in `/boot`
+  changes; measured on a device with `systemd-analyze` (13.8 s, 24.2 s before)
+  ([docs/boot.md](docs/boot.md#kernel-command-line)). *(rc2)*
 - **Front camera** (Samsung S5KC505A): jethac's out-of-tree sensor driver, unchanged, and a device tree patch that
   turns on CAMSS and CCI, the camera rails and the sensor, with `rotation = <180>` (the read-out is upside down on the
   stand and the sensor cannot flip: applications turn the image). Raw RAW10 frames through V4L2; libcamera 0.4's
@@ -149,7 +154,8 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Mesa 26.3.0 final (v0.3)
 - [ ] Fix for the freedreno GMEM loop, proposed upstream
 - [ ] `poweroff` that stays off with the supply plugged in
-- [ ] Faster boot (initramfs framebuffer wait)
+- [x] Faster boot: no initramfs framebuffer wait, 24 s → 14 s (v0.4-rc2)
+- [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
 - [x] Front camera (S5KC505A): raw frames and libcamera 0.4 at 1280×960, optional (patched DTB)
 - [x] Camera in the image: `CAMERA=1` (v0.4-rc1; built and verified, not flashed on a device yet)
 - [x] libcamera at full size (`cma=128M`, v0.4-rc2)

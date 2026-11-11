@@ -20,10 +20,46 @@ The image is the whole `system` partition after repartitioning, with an MBR insi
   **`fdtdir` wins**, so replace the line. A missing file makes lk2nd skip the entry instead of booting it.
 - **p2**, sector 499712 to the end: **ext4** (no `metadata_csum`, like postmarketOS), label `pmOS_root`.
 
-Kernel command line: the postmarketOS one plus `consoleblank=0 vt.global_cursor_default=0` (no blanking, no cursor)
-and `quiet loglevel=0 systemd.show_status=0` (no kernel text on the screen while booting; an application can show
-its own splash, see below). `CAMERA=1` adds `cma=128M`: 128 MB of contiguous memory instead of the default 32 MB, for
-libcamera's full-size buffers ([driver/s5kc505a](../driver/s5kc505a/README.md#libcamera)).
+## Kernel command line
+
+The `append` line of `extlinux.conf`: the postmarketOS one (`pmos_boot_uuid`, `pmos_root_uuid`, `pmos_rootfsopts`)
+plus
+
+- `consoleblank=0 vt.global_cursor_default=0`: no blanking, no cursor;
+- `quiet loglevel=0 systemd.show_status=0`: no kernel text on the screen while booting (an application can show its
+  own splash, see below);
+- `deviceinfo_no_framebuffer=true` (since v0.4-rc2), last: the postmarketOS initramfs (3.7.2) waits for `/dev/fb0`
+  in a loop of 100 × `sleep 0.1` before showing its splash, but it contains no kernel modules, so fb0 cannot appear
+  there and every boot lost 10 s (`ERROR: /dev/fb0 did not appear after waiting 10 seconds!`). The kernel passes
+  `name=value` parameters it does not know into the environment of `/init` (that is how `pmos_root_uuid` gets
+  there), and neither `deviceinfo` file of the initramfs sets this one, so the value stays: the initramfs logs `NOTE: Skipping framebuffer setup (deviceinfo_no_framebuffer)` and goes on. Nothing in `/boot` other than
+  `extlinux.conf` changes. fb0 appears later anyway, from Debian (`msmdrmfb`, about 12 s after the kernel starts).
+  The kernel lists the parameter among its "Unknown kernel command line parameters" and systemd finds it in its
+  environment: both harmless;
+- `CAMERA=1` only, after it: `cma=128M`, 128 MB of contiguous memory instead of the default 32 MB, for libcamera's
+  full-size buffers ([driver/s5kc505a](../driver/s5kc505a/README.md#libcamera)).
+
+A broken `append` line (a lost UUID, a cut line) means the initramfs does not find the root file system: edit
+`extlinux.conf` with care ([image/README.md](../image/README.md#after-the-first-boot)).
+
+## Boot time
+
+`systemd-analyze` on a device: `Startup finished in 6.004s (kernel) + 7.836s (userspace) = 13.840s` with
+`deviceinfo_no_framebuffer=true`; `16.396s + 7.813s = 24.210s` before it (v0.4-rc1 and earlier; "kernel" includes
+the initramfs). Where the time of a boot before the change went, from the kernel's timestamps:
+
+| In order | Time |
+|---|---|
+| kernel, up to `/init` of the initramfs | 0.88 s |
+| initramfs, before its udev (eudev) starts; this ends exactly when `random: crng init done` is logged (most likely udevd reading `/dev/urandom` while there is no hardware RNG and no seed from lk2nd: inferred, not traced) | ~2.06 s |
+| **waiting for `/dev/fb0`**, from 3.35 s to 13.66 s (gone since v0.4-rc2) | 10.3 s |
+| `check_keys` (a `sleep 1`) | ~1.0 s |
+| sub-partitions mapped (`kpartx`) and found (`blkid`) | ~1.0 s |
+| resize check and `e2fsck` of the root | 0.33 s |
+| userspace: `msm-firmware-loader.service`, ordered before udev (about 500 forks for 157 modem blobs), so every hardware probe waits for it | 2.5 s |
+
+The remaining seconds need changes to the initramfs or to the firmware loader and are not done
+([known-issues.md](known-issues.md#boot)).
 
 ## System
 
@@ -55,9 +91,10 @@ disk (50 MB, kept across reboots). About 470 MB used on root without the optiona
   masked.
 - **Services**: `msm-firmware-loader`, `thinksmart-audio`, NetworkManager, ssh, timesyncd, nftables, avahi-daemon; login on the screen
   (`getty@tty1`).
-- **Splash** (optional, done by an application): the screen is free about 17.5 s after the kernel starts. The
-  framebuffer is `/dev/fb0` (800×1280, BGRX); a unit with `DefaultDependencies=no` that loads `msm` and the panel
-  module itself (without waiting for udev) and copies a pre-rendered raw image can show it that early.
+- **Splash** (optional, done by an application): the screen is free about 12 s after the kernel starts (17.5 s
+  before v0.4-rc2, [above](#boot-time)). The framebuffer is `/dev/fb0` (800×1280, BGRX); a unit with
+  `DefaultDependencies=no` that loads `msm` and the panel module itself (without waiting for udev) and copies a
+  pre-rendered raw image can show it that early.
 
 ## Headless boot: the emergency mode we hit (and fixed)
 
@@ -82,7 +119,7 @@ Fixes in the image:
 - `/boot` in fstab with `nofail,x-systemd.device-timeout=90`: if it does not appear, the system still reaches Wi-Fi
   and ssh (`/boot` is only needed to change kernel or `extlinux.conf`); with `nofail` nothing waits for it, and the
   timeout is 90 s rather than 15 s (before v0.4-rc2) because in one slow boot the device appeared later than 15 s and
-  `/boot` stayed unmounted ([known-issues.md](known-issues.md#camera));
+  `/boot` stayed unmounted ([known-issues.md](known-issues.md#boot));
 - `systemd-gpt-auto-generator` disabled: it follows the root up to `mmcblk0` (Android's GPT, dozens of partitions).
 
 None of our units requires `local-fs.target` or `/boot`; everything else is `Wants=`. `image/verify.sh` checks all of
