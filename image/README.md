@@ -122,7 +122,10 @@ would be far smaller: a possible later improvement.
 
 ## Front camera (optional)
 
-`CAMERA=1` in `config.env` installs the S5KC505A sensor driver (`s5kc505a.ko` in `extra/`) and `v4l-utils`, and puts
+`CAMERA=1` in `config.env` installs the S5KC505A sensor driver (`s5kc505a.ko` in `extra/`), `v4l-utils` and the
+libcamera userspace that was tried on a device (from Debian trixie main, without recommends: `libcamera0.4`,
+`libcamera-ipa` with the software ISP of the `simple` pipeline handler, `gstreamer1.0-libcamera` for `libcamerasrc`,
+`gstreamer1.0-tools` for `gst-launch-1.0`; no Debian Mesa), and puts
 the camera DTB (`apq8053-lenovo-cd-18781y-camera.dtb`) in `/boot` **next to** the kernel package's DTB, which stays
 as it is. lk2nd reads one entry and `fdtdir` wins over `fdt`, so `extlinux.conf` gets
 `fdt /apq8053-lenovo-cd-18781y-camera.dtb` **instead of** `fdtdir /`; `/boot/extlinux/extlinux.conf.nocamera` is the
@@ -130,7 +133,14 @@ same file with `fdtdir /`, to go back (`cp` it over `extlinux.conf` and reboot).
 DTB whose sha256 is in `driver/s5kc505a/dtb.sha256`, on top of a `boot.tar` whose DTB is the one it was patched from:
 the DTB is what lk2nd boots, and a DTB that does not boot needs someone at the device
 ([driver/s5kc505a](../driver/s5kc505a/README.md#installing)). With `CAMERA=0` the image is the same as without the
-option. libcamera is not part of it: one `apt install` on the device
+option.
+
+Measured on test builds of v0.4-rc1 (same configuration otherwise): `CAMERA=1` adds 20 packages and 48 MB to the
+plain image (218 → 238 packages, root 472 → 520 MB, `.img.gz` 183 → 199 MB): 5 for `v4l-utils`, 15 for libcamera,
+GStreamer's core and base library, liblttng-ust and libyuv. With `WEB=1`, which already has GStreamer, 14 packages and
+13 MB (304 → 318, 777 → 790 MB). It does not include GStreamer's plugins: `videoconvert` (`gstreamer1.0-plugins-base`) and `videoflip`
+(`gstreamer1.0-plugins-good`, which turns the upside-down frame) pull X11 libraries, cairo, PulseAudio and more
+(+24 and +93 packages; no Mesa). An application that needs them installs them
 ([driver/s5kc505a](../driver/s5kc505a/README.md#libcamera)).
 
 ## Customization
@@ -177,7 +187,9 @@ pipelines use, `ldd` of libplist, `libdns_sd` and the plugins) or off (no GStrea
 too). Front camera (found from `extlinux.conf`, the module or the camera DTB): no `fdtdir`, exactly one `fdt` naming
 the camera DTB, that file in `/boot`, the original DTB still there, both DTBs as pinned in
 `driver/s5kc505a/dtb.sha256`, `extlinux.conf.nocamera`, the module's vermagic, `modules.dep` and `modules.alias`,
-`v4l-utils`; without it, `fdtdir /`.
+`v4l-utils`, the libcamera packages, `ipa_soft_simple.so` with its signature and `soft_ipa_proxy`, no Debian Mesa,
+`ldd` of libcamera, the IPA and the GStreamer plugin and `gst-inspect-1.0 libcamerasrc` through qemu; without it,
+`fdtdir /` (and no GStreamer when the web layer and the AirPlay runtime are off too).
 
 ## After the first boot
 

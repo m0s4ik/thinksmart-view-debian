@@ -7,7 +7,7 @@ in `extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`), udev lo
 ([known-issues.md](../../docs/known-issues.md#camera)). libcamera 0.4 of Debian trixie streams 1280x960 with auto
 exposure ([below](#libcamera)); full size fails on CMA. The read-out is upside down, so the DT now says
 `rotation = <180>`; libcamera 0.4 reports it but does not turn the frame. The camera needs a patched DTB,
-so it is optional: `CAMERA=1` in `image/config.env` builds it into the image ([image/README.md](../../image/README.md#front-camera-optional);
+so it is optional: `CAMERA=1` in `image/config.env` builds it into the image together with libcamera ([image/README.md](../../image/README.md#front-camera-optional);
 not flashed on a device yet), or install it by hand as below.
 
 The ThinkSmart View's front camera is a Samsung **S5KC505A** (5 Mpixel, RAW10 GRBG, 2 CSI-2 lanes at 480 MHz, 24 MHz
@@ -169,6 +169,7 @@ Debian trixie's own **0.4.0** works (one device, 2026-11-11; trixie-backports' 0
 
 ```sh
 apt install --no-install-recommends libcamera0.4 libcamera-ipa gstreamer1.0-libcamera gstreamer1.0-tools   # no Debian Mesa
+apt install --no-install-recommends gstreamer1.0-plugins-base gstreamer1.0-plugins-good   # videoconvert, videoflip, multifilesink
 gst-launch-1.0 libcamerasrc ! video/x-raw,width=1280,height=960 ! videoconvert ! video/x-raw,format=RGB ! \
 	multifilesink location=/run/lc.raw max-files=1 next-file=buffer      # as root; 3,686,400-byte RGB frames
 ```
@@ -183,7 +184,9 @@ properties, no `s5kc505a.yaml` tuning (falls back to `uncalibrated.yaml`), no ca
   `cma=` on the kernel command line is not tried. Ask for 1280x960.
 - With `rotation = <180>` in the DT the frames of `libcamerasrc` 0.4 are still upside down (the sensor has no flip
   controls): add `videoflip method=rotate-180` after `videoconvert` (`gstreamer1.0-plugins-good`).
-- `CAMERA=1` does not install libcamera: it stays optional, with the line above.
+- `CAMERA=1` installs the first line (15 packages, ~45 MB on the plain image), not the second: GStreamer's base and
+  good plugins pull X11 libraries, cairo, PulseAudio and more (+93 packages, ~110 MB; no Mesa). On a device that
+  already has them (`AIRPLAY=1`) the pipeline above works as it is.
 
 ## Credits and licence
 

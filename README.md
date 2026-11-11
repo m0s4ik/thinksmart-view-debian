@@ -137,8 +137,8 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] `poweroff` that stays off with the supply plugged in
 - [ ] Faster boot (initramfs framebuffer wait)
 - [x] Front camera (S5KC505A): raw frames, optional (patched DTB)
-- [ ] Camera in the image (`CAMERA=1`: built, not flashed on a device yet); libcamera at full size (1280×960 works,
-  2560×1600 fails on CMA)
+- [ ] Camera in the image (`CAMERA=1`, with libcamera 0.4: built and verified, not flashed on a device yet); libcamera
+  at full size (1280×960 works, 2560×1600 fails on CMA)
 - [ ] FT8201 panel variant
 
 ## Credits
