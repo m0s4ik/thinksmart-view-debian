@@ -350,7 +350,7 @@ fi
 
 echo "-- services"
 for s in NetworkManager ssh systemd-timesyncd nftables avahi-daemon msm-firmware-loader thinksmart-audio thinksmart-light \
-         thinksmart-boot-report; do
+         thinksmart-boot-report thinksmart-boot-report-done; do
     st=$(enabled "$s"); [ "$st" = enabled ] && ok "$s: $st" || no "$s: $st"
 done
 for s in alsa-restore alsa-state; do

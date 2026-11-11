@@ -218,9 +218,11 @@ and the AirPlay runtime are off too).
 - Boot times: `journalctl -t thinksmart-boot` (one line per boot, `SLOW` ones with details; settings in
   `/etc/default/thinksmart-boot-report`, [docs/boot.md](../docs/boot.md#boot-report)). On a device whose image does
   not have it yet (before v0.4-rc2), install it by hand: copy `rootfs/usr/local/sbin/thinksmart-boot-report` (mode
-  0755), `rootfs/etc/systemd/system/thinksmart-boot-report.service` and `rootfs/etc/default/thinksmart-boot-report`
-  to the same paths, then `systemctl daemon-reload && systemctl enable thinksmart-boot-report` (the next boot reports;
-  `systemctl start thinksmart-boot-report` reports the current one at once).
+  0755), `rootfs/etc/systemd/system/thinksmart-boot-report.service`,
+  `rootfs/etc/systemd/system/thinksmart-boot-report-done.service` and `rootfs/etc/default/thinksmart-boot-report` to
+  the same paths, then `systemctl daemon-reload && systemctl enable thinksmart-boot-report
+  thinksmart-boot-report-done` (the next boot reports; `systemctl start thinksmart-boot-report` reports the current
+  one within ten seconds).
 - `apt upgrade` is fine: Debian packages do not touch `/boot` or the 7.1.3 modules.
 - From v0.2 or earlier (Mesa in `/opt/mesa-freedreno`) to the Mesa package without reflashing (done on a device
   running v0.2: apt adds libglvnd0, libegl1, libgles2 and libwayland-client0; GPU programs then use the new Mesa

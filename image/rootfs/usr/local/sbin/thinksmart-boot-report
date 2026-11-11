@@ -7,21 +7,23 @@
 # messages. A SLOW boot (total above SLOW_TOTAL, or a benchmark sample SLOW_RATIO times the fastest, or above
 # SLOW_BENCH_MS) also gets every sample and the CPU clock state taken WHILE it was slow (docs/known-issues.md#boot).
 # Settings: /etc/default/thinksmart-boot-report. Files: $RUNTIME_DIRECTORY (/run/thinksmart-boot): samples,
-# snapshot-*, report.
+# snapshot-*, report; default-target is touched by thinksmart-boot-report-done.service.
 # Reads /proc and /sys only (and debugfs, when systemd has mounted it); never fails and exits by itself.
+# It runs while the system boots, so it is kept cheap: a sample uses shell builtins only (no fork) apart from `sleep`;
+# systemd is asked whether the boot has finished only once multi-user.target has been reached (and every 10th sample
+# in case that never comes); temperatures and the clock state are read at the first sample and at the end.
 # Test without the device: ROOT=<dir> prefixes every /sys path, RUNTIME_DIRECTORY=<dir> holds the files.
 set -u
 ROOT=${ROOT:-}
 SYS=$ROOT/sys
 OUT=${RUNTIME_DIRECTORY:-/run/thinksmart-boot}
-num() {  # num VALUE DEFAULT: VALUE if it is a whole number, else DEFAULT
-    case $1 in ''|*[!0-9]*) echo "$2" ;; *) echo "$1" ;; esac
-}
-SLOW_TOTAL=$(num "${SLOW_TOTAL:-}" 30)
-SLOW_RATIO=$(num "${SLOW_RATIO:-}" 5)
-SLOW_BENCH_MS=$(num "${SLOW_BENCH_MS:-}" 0)
-BENCH_LOOPS=$(num "${BENCH_LOOPS:-}" 10000)
-MAX_WAIT=$(num "${MAX_WAIT:-}" 180)
+FLAG=$OUT/default-target
+# settings: whole numbers, else the default
+case ${SLOW_TOTAL:-} in ''|*[!0-9]*) SLOW_TOTAL=30 ;; esac
+case ${SLOW_RATIO:-} in ''|*[!0-9]*) SLOW_RATIO=5 ;; esac
+case ${SLOW_BENCH_MS:-} in ''|*[!0-9]*) SLOW_BENCH_MS=0 ;; esac
+case ${BENCH_LOOPS:-} in ''|*[!0-9]*) BENCH_LOOPS=2000 ;; esac
+case ${MAX_WAIT:-} in ''|*[!0-9]*) MAX_WAIT=180 ;; esac
 [ "$SLOW_RATIO" -ge 2 ] || SLOW_RATIO=2
 # speed ratios are taken against at least FLOOR ms: the CPU time of a task is counted in scheduler ticks (4 ms at
 # HZ=250), so a few-ms sample is too coarse to compare
@@ -29,125 +31,159 @@ FLOOR=10
 POLICY=$SYS/devices/system/cpu/cpufreq/policy0
 DEBUG=$SYS/kernel/debug
 
-mkdir -p "$OUT" 2>/dev/null
-rm -f "$OUT"/samples "$OUT"/snapshot-* "$OUT"/report 2>/dev/null
+# set through rd and secs (eval)
+cur='?'; hw='?'; online='?'; rc='?'; c='?'; h='?'; g='?'; mn='?'; mx='?'; tt='?'; s_total='?'; s_kern='?'; s_initrd='?'
+s_user='?'
 
-uptime_cs() {  # uptime in hundredths of a second -> $up_cs, and as text -> $up
+[ -d "$OUT" ] || mkdir -p "$OUT" 2>/dev/null
+{ :; } 2>/dev/null > "$OUT/samples"
+
+rd() {  # rd VAR FILE: first line of FILE into VAR, "?" if unreadable
+    _v=
+    read -r _v 2>/dev/null < "$2"
+    eval "$1=\${_v:-?}"
+}
+uptime_cs() {  # uptime as text -> $up, in hundredths of a second -> $up_cs
     up=0.00
     read -r up _ 2>/dev/null < /proc/uptime
-    i=${up%.*}; f=${up#*.}; f=${f#0}
-    up_cs=$(( $(num "$i" 0) * 100 + $(num "$f" 0) ))
+    _i=${up%.*}; _f=${up#*.}; _f=${_f#0}
+    case $_i$_f in ''|*[!0-9]*) up_cs=0 ;; *) up_cs=$((_i * 100 + _f)) ;; esac
 }
-cpu_ns() {  # CPU time of this shell in ns (/proc/<pid>/schedstat, CONFIG_SCHED_INFO), 0 if not available
-    ns=0
+cpu_ns() {  # CPU time of this shell in ns (/proc/<pid>/schedstat, CONFIG_SCHED_INFO) -> $ns, -1 if not available
+    ns=
     read -r ns _ 2>/dev/null < "/proc/$$/schedstat"
-    ns=$(num "$ns" 0)
+    case $ns in ''|*[!0-9]*) ns=-1 ;; esac
 }
-val() {  # val FILE: first line of FILE, or "?"
-    v=
-    read -r v 2>/dev/null < "$1"
-    echo "${v:-?}"
+temps() {  # every thermal zone in degrees C -> $temps, the highest -> $tmax
+    temps=; tmax=
+    for z in "$SYS"/class/thermal/thermal_zone*/temp; do
+        [ -e "$z" ] || continue
+        v=; read -r v 2>/dev/null < "$z"
+        case $v in
+            ''|-|*[!0-9-]*|?*-*) v='?' ;;
+            *) v=$((v / 1000)); { [ -z "$tmax" ] || [ "$v" -gt "$tmax" ]; } && tmax=$v ;;
+        esac
+        temps=${temps:+$temps,}$v
+    done
 }
 
-count=0; fastest=0; slowest=0; prev=0; benches=; changes=0; snaps=0; tmax=
+count=0; fastest=0; slowest=0; prev=0; benches=; changes=0; snaps=0; files=
 bench_kind=cpu
 sample() {
     uptime_cs; t0=$up_cs; cpu_ns; n0=$ns
     i=0
     while [ $i -lt "$BENCH_LOOPS" ]; do i=$((i + 1)); done
     cpu_ns; n1=$ns; uptime_cs
-    if [ "$n0" -gt 0 ] && [ "$n1" -gt "$n0" ]; then
+    if [ "$n0" -ge 0 ] && [ "$n1" -ge "$n0" ]; then
         bench=$(( (n1 - n0) / 1000000 ))
     else
         bench=$(( (up_cs - t0) * 10 )); bench_kind=wall
     fi
     [ "$bench" -gt 0 ] || bench=1
-    cur=$(val "$POLICY/scaling_cur_freq"); hw=$(val "$POLICY/cpuinfo_cur_freq"); online=$(val "$SYS/devices/system/cpu/online")
-    temps=
-    for z in "$SYS"/class/thermal/thermal_zone*/temp; do
-        [ -e "$z" ] || continue
-        v=; read -r v 2>/dev/null < "$z"
-        case $v in ''|*[!0-9-]*) v='?' ;; *) v=$((v / 1000)); { [ -z "$tmax" ] || [ "$v" -gt "$tmax" ]; } && tmax=$v ;; esac
-        temps=${temps:+$temps,}$v
-    done
+    rd cur "$POLICY/scaling_cur_freq"; rd hw "$POLICY/cpuinfo_cur_freq"; rd online "$SYS/devices/system/cpu/online"
     count=$((count + 1))
     benches="$benches $bench"
     { [ "$fastest" = 0 ] || [ "$bench" -lt "$fastest" ]; } && fastest=$bench
     [ "$bench" -gt "$slowest" ] && slowest=$bench
-    echo "sample t=${up}s bench=${bench}ms cur=$cur hw=$hw online=$online temp=${temps:-?}" 2>/dev/null >> "$OUT/samples"
+    echo "sample t=${up}s bench=${bench}ms cur=$cur hw=$hw online=$online" 2>/dev/null >> "$OUT/samples"
 }
-# snapshot LABEL: the CPU clock state now (cpufreq of every policy, CPU clocks, CPU power domains, deferred probes)
+# snapshot LABEL: the CPU clock state now (cpufreq of every policy, CPU clocks, CPU power domains, deferred probes,
+# temperatures)
 snapshot() {
     snaps=$((snaps + 1))
+    files="$files $OUT/snapshot-$snaps"
+    temps
     {
-        echo "snapshot $snaps at ${up}s: $1"
+        echo "snapshot $snaps at ${up}s: $1; temperatures ${temps:-?} C"
         for p in "$SYS"/devices/system/cpu/cpufreq/policy*; do
             [ -d "$p" ] || continue
-            echo "${p##*/}: cpus $(val "$p/related_cpus") cur $(val "$p/scaling_cur_freq") hw $(val "$p/cpuinfo_cur_freq") governor $(val "$p/scaling_governor") min $(val "$p/scaling_min_freq") max $(val "$p/scaling_max_freq") transitions $(val "$p/stats/total_trans")"
-            [ -r "$p/stats/time_in_state" ] && echo "${p##*/} time_in_state (kHz:10ms) $(sed 's/ /:/' "$p/stats/time_in_state" 2>/dev/null | tr '\n' ' ')"
+            rd rc "$p/related_cpus"; rd c "$p/scaling_cur_freq"; rd h "$p/cpuinfo_cur_freq"; rd g "$p/scaling_governor"
+            rd mn "$p/scaling_min_freq"; rd mx "$p/scaling_max_freq"; rd tt "$p/stats/total_trans"
+            echo "${p##*/}: cpus $rc cur $c hw $h governor $g min $mn max $mx transitions $tt"
+            tis=
+            while read -r k t; do tis="$tis $k:$t"; done < "$p/stats/time_in_state"
+            echo "${p##*/} time_in_state (kHz:10ms)${tis:- ?}"
         done
         if [ -r "$DEBUG/clk/clk_summary" ]; then
             # the CPU clocks of msm8953 (drivers/clk/qcom/apcs-msm8953.c, a53-pll.c) and their parents
-            sed -n -E -e '1,2p' -e '/apcs|a53pll|gpll0|cci|bimc|^ *xo/p' "$DEBUG/clk/clk_summary" 2>/dev/null
+            sed -n -E -e '1,2p' -e '/apcs|a53pll|gpll0|cci|bimc|^ *xo/p' "$DEBUG/clk/clk_summary"
         else
             echo "no $DEBUG/clk/clk_summary (debugfs not mounted)"
         fi
-        [ -r "$DEBUG/pm_genpd/pm_genpd_summary" ] && grep -iE 'domain|cpr|cpu' "$DEBUG/pm_genpd/pm_genpd_summary" 2>/dev/null
+        [ -r "$DEBUG/pm_genpd/pm_genpd_summary" ] && grep -iE 'domain|cpr|cpu' "$DEBUG/pm_genpd/pm_genpd_summary"
         if [ -r "$DEBUG/devices_deferred" ]; then
-            echo "devices_deferred: $(tr '\n' ' ' < "$DEBUG/devices_deferred" 2>/dev/null)"
+            d=
+            while read -r l; do d="$d $l"; done < "$DEBUG/devices_deferred"
+            echo "devices_deferred:${d:- none}"
         fi
     } 2>/dev/null > "$OUT/snapshot-$snaps"
 }
-finished() {  # systemd's FinishTimestampMonotonic is set once the boot transaction is done
-    f=$(systemctl show -p FinishTimestampMonotonic --value 2>/dev/null)
-    case $f in ''|0|*[!0-9]*) return 1 ;; esac
+finished() {  # systemd's timestamps (us); true once FinishTimestampMonotonic is set (boot transaction done)
+    kern=0; initrd=0; user=0; fin=0
+    for kv in $(systemctl show -p KernelTimestampMonotonic -p InitRDTimestampMonotonic -p UserspaceTimestampMonotonic \
+            -p FinishTimestampMonotonic 2>/dev/null); do
+        case $kv in
+            KernelTimestampMonotonic=*) kern=${kv#*=} ;;
+            InitRDTimestampMonotonic=*) initrd=${kv#*=} ;;
+            UserspaceTimestampMonotonic=*) user=${kv#*=} ;;
+            FinishTimestampMonotonic=*) fin=${kv#*=} ;;
+        esac
+    done
+    case $kern in ''|*[!0-9]*) kern=0 ;; esac
+    case $initrd in ''|*[!0-9]*) initrd=0 ;; esac
+    case $user in ''|*[!0-9]*) user=0 ;; esac
+    case $fin in ''|*[!0-9]*) fin=0 ;; esac
+    [ "$fin" -gt 0 ]
 }
 
-atleast() { if [ "$1" -lt "$FLOOR" ]; then echo "$FLOOR"; else echo "$1"; fi; }
 unfinished=0
 while :; do
     sample
+    lo=$prev; [ "$lo" -ge "$FLOOR" ] || lo=$FLOOR
+    hi=$bench; [ "$hi" -ge "$FLOOR" ] || hi=$FLOOR
     if [ "$count" = 1 ]; then
         snapshot "first sample"
-    elif [ "$changes" -lt 4 ] && { [ "$bench" -ge $(($(atleast "$prev") * SLOW_RATIO)) ] ||
-                                    [ "$prev" -ge $(($(atleast "$bench") * SLOW_RATIO)) ]; }; then
+    elif [ "$changes" -lt 4 ] && { [ "$bench" -ge $((lo * SLOW_RATIO)) ] || [ "$prev" -ge $((hi * SLOW_RATIO)) ]; }; then
         # the speed changed by SLOW_RATIO or more since the last sample: keep the state while slow and right after
         changes=$((changes + 1)); snapshot "benchmark ${prev}ms -> ${bench}ms"
     fi
     prev=$bench
-    finished && break
-    if [ "$up_cs" -ge $((MAX_WAIT * 100)) ]; then unfinished=1; break; fi
+    if [ -e "$FLAG" ] || [ $((count % 10)) = 0 ]; then
+        finished && break
+    fi
+    if [ "$up_cs" -ge $((MAX_WAIT * 100)) ]; then
+        finished && break
+        unfinished=1; break
+    fi
     sleep 1
 done
-snapshot "end"
 
 # --- report ---------------------------------------------------------------------------------------------------------
-secs() { printf '%d.%03d' $(($1 / 1000000)) $(($1 / 1000 % 1000)); }
-kern=0; initrd=0; user=0; fin=0
-for kv in $(systemctl show -p KernelTimestampMonotonic -p InitRDTimestampMonotonic -p UserspaceTimestampMonotonic \
-        -p FinishTimestampMonotonic 2>/dev/null); do
-    case $kv in
-        KernelTimestampMonotonic=*) kern=$(num "${kv#*=}" 0) ;;
-        InitRDTimestampMonotonic=*) initrd=$(num "${kv#*=}" 0) ;;
-        UserspaceTimestampMonotonic=*) user=$(num "${kv#*=}" 0) ;;
-        FinishTimestampMonotonic=*) fin=$(num "${kv#*=}" 0) ;;
-    esac
-done
+secs() {  # secs VAR MICROSECONDS: "S.mmm" into VAR
+    _ms=$(($2 / 1000 % 1000))
+    [ "$_ms" -ge 100 ] || _ms=0$_ms
+    [ "$_ms" -ge 10 ] || _ms=0$_ms
+    eval "$1=$(($2 / 1000000)).$_ms"
+}
 slow=
-if [ "$unfinished" = 1 ] || [ "$fin" = 0 ]; then
+if [ "$unfinished" = 1 ]; then
     times="boot not finished after ${up}s"
     slow="not finished"
 else
     # as systemd-analyze: the postmarketOS initramfs is not systemd's, so "kernel" includes it
+    secs s_total $((fin - kern)); secs s_user $((fin - user))
     if [ "$initrd" -gt 0 ]; then
-        times="boot $(secs $((fin - kern)))s (kernel $(secs $((initrd - kern)))s + initrd $(secs $((user - initrd)))s + userspace $(secs $((fin - user)))s)"
+        secs s_kern $((initrd - kern)); secs s_initrd $((user - initrd))
+        times="boot ${s_total}s (kernel ${s_kern}s + initrd ${s_initrd}s + userspace ${s_user}s)"
     else
-        times="boot $(secs $((fin - kern)))s (kernel $(secs $((user - kern)))s + userspace $(secs $((fin - user)))s)"
+        secs s_kern $((user - kern))
+        times="boot ${s_total}s (kernel ${s_kern}s + userspace ${s_user}s)"
     fi
     [ $((fin - kern)) -le $((SLOW_TOTAL * 1000000)) ] || slow="total above ${SLOW_TOTAL}s"
 fi
+# shellcheck disable=SC2086
 median=$(printf '%s\n' $benches | sort -n | sed -n "$(( (count + 1) / 2 ))p")
-ref=$(atleast "$fastest")
+ref=$fastest; [ "$ref" -ge "$FLOOR" ] || ref=$FLOOR
 ratio=$((slowest * 10 / ref))
 if [ "$slowest" -ge $((ref * SLOW_RATIO)) ]; then
     slow="${slow:+$slow, }slowest benchmark $((ratio / 10)).$((ratio % 10))x the fastest"
@@ -155,23 +191,33 @@ fi
 if [ "$SLOW_BENCH_MS" -gt 0 ] && [ "$slowest" -ge "$SLOW_BENCH_MS" ]; then
     slow="${slow:+$slow, }benchmark ${slowest}ms >= ${SLOW_BENCH_MS}ms"
 fi
+if [ -n "$slow" ]; then
+    snapshot "end"
+else
+    temps
+fi
 
 # order of "clk: Disabling unused clocks" (late initcall) and cpufreq coming online (docs/known-issues.md#boot)
-kmsg=$(dmesg 2>/dev/null)
-case $kmsg in
-    *'Disabling unused clocks'*) ;;
-    *) kmsg=$(journalctl -k -b 0 -o short-monotonic --no-pager 2>/dev/null) ;;
+PATTERN='clk: Disabling unused clocks|cpufreq_policy_online'
+kl=$(dmesg 2>/dev/null | grep -n -E "$PATTERN")
+case $kl in
+    *'Disabling unused clocks'*cpufreq_policy_online*|*cpufreq_policy_online*'Disabling unused clocks'*) ;;
+    *) kl=$(journalctl -k -b 0 -o short-monotonic --no-pager 2>/dev/null | grep -n -E "$PATTERN") ;;
 esac
-stamp() { sed -n '1s/^\([0-9]*\):[^[]*\[ *\([0-9.]*\)\].*/\1 \2/p'; }
-# "<line number> <seconds>" of the first match, or "- -" when the message is missing
-# shellcheck disable=SC2046
-set -- $(printf '%s\n' "$kmsg" | grep -n -m1 'clk: Disabling unused clocks' | stamp) - -
-clk_line=$1; clk_t=$2
-# shellcheck disable=SC2046
-set -- $(printf '%s\n' "$kmsg" | grep -n -m1 'cpufreq_policy_online' | stamp) - -
-cpf_line=$1; cpf_t=$2
+clk_line=-; clk_t=; cpf_line=-; cpf_t=
+while IFS= read -r l; do
+    n=${l%%:*}; t=${l#*\[}; t=${t%%\]*}; t=${t#"${t%%[! ]*}"}
+    case $n in ''|*[!0-9]*) continue ;; esac
+    case $l in
+        *'Disabling unused clocks'*) [ "$clk_line" = - ] && clk_line=$n && clk_t=$t ;;
+        *cpufreq_policy_online*) [ "$cpf_line" = - ] && cpf_line=$n && cpf_t=$t ;;
+    esac
+done <<EOF
+$kl
+EOF
 if [ "$clk_line" = - ] || [ "$cpf_line" = - ]; then
-    order="order of clocks and cpufreq unknown (kernel messages not found:$([ "$clk_line" != - ] || echo " unused clocks")$([ "$cpf_line" != - ] || echo " cpufreq"))"
+    missing=; [ "$clk_line" != - ] || missing=" unused clocks"; [ "$cpf_line" != - ] || missing="$missing cpufreq"
+    order="order of clocks and cpufreq unknown (kernel messages not found:$missing)"
 elif [ "$clk_line" -lt "$cpf_line" ]; then
     order="unused clocks off ${clk_t}s, cpufreq ${cpf_t}s: clocks before cpufreq"
 else
@@ -185,7 +231,7 @@ if [ -z "$slow" ]; then
 else
     echo "<4>SLOW $line; SLOW: $slow (samples and clock state follow)"
     echo "SLOW $line; SLOW: $slow" 2>/dev/null > "$OUT/report"
-    for f in "$OUT/samples" "$OUT"/snapshot-*; do
+    for f in "$OUT/samples" $files; do
         [ -r "$f" ] || continue
         while IFS= read -r l; do echo "<6>$l"; done 2>/dev/null < "$f"
     done

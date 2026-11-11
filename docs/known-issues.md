@@ -67,8 +67,8 @@
   `/sys/class/thermal/thermal_zone*/temp`. Since v0.4-rc2 the image records this by itself: `thinksmart-boot-report`
   writes every boot's time to the journal (`journalctl -t thinksmart-boot`), and a boot above 30 s, or one in which
   the CPU benchmark slows down five times or more, is marked `SLOW` and followed by the samples taken every second
-  while it was slow (benchmark, `scaling_cur_freq`/`cpuinfo_cur_freq`, temperatures) and the CPU clocks, cpufreq
-  statistics and CPU power domains as they were then, plus the order of the two kernel messages
+  while it was slow (benchmark, `scaling_cur_freq`/`cpuinfo_cur_freq`) and the CPU clocks, cpufreq statistics, CPU
+  power domains and temperatures as they were then, plus the order of the two kernel messages
   ([boot.md](boot.md#boot-report)).
 - lk2nd supports a **single entry** in `extlinux.conf`.
 - **Volume Up at power-on is not a rescue path**: with a rescue boot image written to the `recovery` partition,

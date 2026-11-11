@@ -4,6 +4,7 @@
 # the boot has finished, then one line in the journal (journalctl -t thinksmart-boot); a slow boot also gets the
 # samples and the CPU clock state taken while it was slow. Type=simple: it never delays the boot. Settings in
 # /etc/default/thinksmart-boot-report; files in /run/thinksmart-boot (docs/boot.md#boot-report).
+# thinksmart-boot-report-done.service tells it when multi-user.target has been reached.
 [Unit]
 Description=ThinkSmart View boot report (boot time and CPU speed while booting)
 DefaultDependencies=no

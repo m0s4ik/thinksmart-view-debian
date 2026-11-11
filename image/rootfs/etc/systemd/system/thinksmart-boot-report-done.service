@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+# SPDX-FileCopyrightText: 2026 Andrea Mattera
+# Part of the boot report (thinksmart-boot-report.service): marks that multi-user.target has been reached, so the
+# report starts asking systemd whether the boot has finished only from then on, instead of once a second.
+[Unit]
+Description=ThinkSmart View boot report: default target reached
+After=multi-user.target graphical.target
+ConditionPathIsDirectory=/run/thinksmart-boot
+
+[Service]
+Type=oneshot
+ExecStart=-/usr/bin/touch /run/thinksmart-boot/default-target
+
+[Install]
+WantedBy=multi-user.target

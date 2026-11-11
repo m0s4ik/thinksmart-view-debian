@@ -10,5 +10,5 @@ SLOW_RATIO=5
 SLOW_BENCH_MS=0
 # - or the boot has not finished MAX_WAIT seconds after the kernel started (the report stops waiting then).
 MAX_WAIT=180
-# Iterations of the benchmark (a shell loop, timed in CPU time of the sampler).
-BENCH_LOOPS=10000
+# Iterations of the benchmark (a shell loop, timed in CPU time of the sampler): 2000 take about 20 ms on the device.
+BENCH_LOOPS=2000
