@@ -4,8 +4,9 @@
 """Turn one packed RAW10 GRBG frame (V4L2 'pgAA', as written by v4l2-ctl --stream-to) into a viewable PNG.
 
 Half resolution: one RGB pixel per 2x2 Bayer quad, black level subtracted, grey-world white balance, sRGB-like
-gamma, optionally rotated (the read-out is upright with the device on its stand, landscape). Standard library
-only (runs on the device), a few seconds for a 1304x980 frame. A quick look, not an ISP.
+gamma, turned 180 degrees by default (the read-out is upside down with the device on its stand, landscape; the
+DT says rotation 180). Standard library only (runs on the device), a few seconds for a 1304x980 frame. A quick
+look, not an ISP.
 
 usage: raw10-to-png.py <frame.raw> <width> <height> <out.png> [--stride N] [--rotation 0|90|180|270] [--frame N]
 """
@@ -62,8 +63,9 @@ def main():
     ap.add_argument("height", type=int)
     ap.add_argument("out")
     ap.add_argument("--stride", type=int, help="bytes per line (default: width*10/8 rounded up to 8)")
-    ap.add_argument("--rotation", type=int, default=0,
-                    help="clockwise turn applied to the image (default 0: upright with the device on its stand)")
+    ap.add_argument("--rotation", type=int, default=180,
+                    help="clockwise turn applied to the image (default 180: upright with the device on its stand; "
+                         "0 = the sensor's read-out as it is)")
     ap.add_argument("--frame", type=int, default=0, help="frame index when the file holds several")
     a = ap.parse_args()
 
