@@ -90,8 +90,8 @@ grep -q "consoleblank=0 vt.global_cursor_default=0" "$E" && ok "extlinux.conf: c
 grep -q "quiet loglevel=0 systemd.show_status=0 " "$E" && ok "extlinux.conf: quiet loglevel=0 systemd.show_status=0 (no text on the screen while booting)" || no "extlinux.conf: loglevel/show_status"
 grep -q "^UUID=${U2}[[:space:]]*/[[:space:]]" "$V/etc/fstab" && grep -q "^UUID=${U1}[[:space:]]*/boot[[:space:]]" "$V/etc/fstab" \
     && ok "fstab with the same UUIDs" || no "fstab"
-grep -q "^UUID=${U1}[[:space:]]*/boot[[:space:]].*nofail,x-systemd.device-timeout=15[[:space:]]" "$V/etc/fstab" \
-    && ok "fstab: /boot with nofail,x-systemd.device-timeout=15" || no "fstab: /boot without nofail/device-timeout"
+grep -q "^UUID=${U1}[[:space:]]*/boot[[:space:]].*nofail,x-systemd.device-timeout=90[[:space:]]" "$V/etc/fstab" \
+    && ok "fstab: /boot with nofail,x-systemd.device-timeout=90" || no "fstab: /boot without nofail/device-timeout=90"
 for f in /usr/lib/udev/rules.d/55-dm.rules /usr/lib/udev/rules.d/60-persistent-storage-dm.rules /etc/udev/rules.d/54-dm-initramfs.rules; do
     check "udev: $f" test -s "$V$f"
 done
@@ -355,7 +355,7 @@ inside SYSTEMD_PROC_CMDLINE= SYSTEMD_IN_INITRD=0 /usr/lib/systemd/system-generat
     && ok "fstab generator: boot.mount only wanted by local-fs.target (nofail)" || no "fstab generator: boot.mount"
 [ "$(ls "$G/local-fs.target.requires" 2>/dev/null | tr '\n' ' ')" = "-.mount " ] \
     && ok "fstab generator: local-fs.target requires only -.mount" || no "fstab generator: local-fs.target.requires = $(ls "$G/local-fs.target.requires" 2>/dev/null | tr '\n' ' ')"
-grep -qs '^JobRunningTimeoutSec=15$' "$G"/*.device.d/50-device-timeout.conf && ok "fstab generator: 15 s wait for the /boot device" || no "fstab generator: device-timeout"
+grep -qs '^JobRunningTimeoutSec=90$' "$G"/*.device.d/50-device-timeout.conf && ok "fstab generator: 90 s wait for the /boot device" || no "fstab generator: device-timeout"
 inside /usr/bin/python3 -c "import venv, ssl, sqlite3" 2>/dev/null && ok "python3 with venv (for applications)" || no "python3"
 inside /usr/bin/aplay -L > "$V/tmp/pcm.txt" 2>&1; grep -q '^speaker$' "$V/tmp/pcm.txt" && grep -q '^default$' "$V/tmp/pcm.txt" \
     && ok "ALSA pcms speaker and default (asound.conf parsed)" || { no "ALSA pcms"; head -5 "$V/tmp/pcm.txt"; }

@@ -1,7 +1,9 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Andrea Mattera
 # The root file system is already mounted by the postmarketOS initramfs (pmos_root_uuid, after e2fsck).
-# /boot is only needed to change the kernel or extlinux.conf: nofail and a short timeout, so that if the device does
-# not show up (or fsck fails) the system still reaches ssh instead of emergency mode (a dead end without a keyboard).
+# /boot is only needed to change the kernel or extlinux.conf: nofail, so that if the device does not show up (or fsck
+# fails) the system still reaches ssh instead of emergency mode (a dead end without a keyboard). With nofail nothing
+# waits for it, so the timeout only bounds how long systemd keeps waiting for the device: 90 s, because in one slow
+# boot (85 s) the device appeared after 15 s and /boot was left unmounted.
 UUID=@ROOT_UUID@	/	ext4	defaults,noatime	0	0
-UUID=@BOOT_UUID@	/boot	ext2	defaults,noatime,nofail,x-systemd.device-timeout=15	0	2
+UUID=@BOOT_UUID@	/boot	ext2	defaults,noatime,nofail,x-systemd.device-timeout=90	0	2
