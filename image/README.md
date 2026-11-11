@@ -123,36 +123,47 @@ would be far smaller: a possible later improvement.
 
 ## Front camera (optional)
 
-`CAMERA=1` in `config.env` installs the S5KC505A sensor driver (`s5kc505a.ko` in `extra/`, with the flip controls
-libcamera uses to turn the frame upright), `v4l-utils` and the libcamera userspace that was tried on a device:
-`libcamera0.7`, `libcamera-ipa` (the software ISP of the `simple` pipeline handler, debayering on the GPU through
-`mesa-freedreno`) and `gstreamer1.0-libcamera` (`libcamerasrc`) from **trixie-backports**, their dependencies and
-`gstreamer1.0-tools` (`gst-launch-1.0`) from trixie, without recommends and without Debian Mesa. trixie's own
-libcamera 0.4 debayers on the CPU and does not follow the sensor's flips. The image keeps
-`/etc/apt/sources.list.d/debian-backports.sources` (trixie-backports at Debian's default priority, no pin): `apt
-upgrade` updates these three packages from there and takes nothing else from it unless asked
-(`apt install <package>/trixie-backports`). `/etc/udev/rules.d/70-camera-dma-heap.rules` gives group `video` the
-dma-buf heaps (`/dev/dma_heap/*`, root only by default); a program that is not root needs groups `video` and
-`render` (the GPU debayer opens `/dev/dri/renderD128`): `SupplementaryGroups=video render` in its unit (the image
-adds no user to them). It also puts
-the camera DTB (`apq8053-lenovo-cd-18781y-camera.dtb`) in `/boot` **next to** the kernel package's DTB, which stays
-as it is. lk2nd reads one entry and `fdtdir` wins over `fdt`, so `extlinux.conf` gets
-`fdt /apq8053-lenovo-cd-18781y-camera.dtb` **instead of** `fdtdir /`, and `cma=128M` at the end of its `append`
-line: 128 MB of contiguous memory instead of the kernel's default 32 MB, which libcamera needs for full-size frames
-(2560×1600 fails without it; the reservation does not change boot time or, in practice, free memory). A constant in
-`build.sh` (`CAMERA_CMA`), not a setting. `/boot/extlinux/extlinux.conf.nocamera` is the file a `CAMERA=0` image has
-(`fdtdir /`, no `cma=`), to go back (`cp` it over `extlinux.conf` and reboot). `build.sh` accepts only the camera
-DTB whose sha256 is in `driver/s5kc505a/dtb.sha256`, on top of a `boot.tar` whose DTB is the one it was patched from:
-the DTB is what lk2nd boots, and a DTB that does not boot needs someone at the device
-([driver/s5kc505a](../driver/s5kc505a/README.md#installing)). With `CAMERA=0` the image is the same as without the
-option. A `CAMERA=1` image of an earlier v0.4-rc2 commit (`WEB=1 AIRPLAY=1 CAMERA=1`, 451 packages; libcamera 0.4
-and the driver without flips) was flashed and booted on one device: lk2nd booted the camera DTB, no failed units,
-`CmaTotal` 131072 kB, the sensor found, libcamera at 2560×1600, boot 13.1 s. The flip driver, libcamera 0.7.1 and the
-udev rule were then tried by hand on that device (upright frames, about 14 fps at 2560×1600, a user without
-privileges in groups `video` and `render`), not yet as a flashed image.
+`CAMERA=1` in `config.env` adds the front camera. How the sensor, the driver and libcamera behave is in
+[driver/s5kc505a](../driver/s5kc505a/README.md); this is what the option puts in the image:
 
-Measured on test builds (same configuration otherwise): `CAMERA=1` adds 25 packages and 62 MB to the plain image (218
-→ 243 packages, root 472 → 534 MB, `.img.gz` 183 → 202 MB): 5 for `v4l-utils`, 20 for libcamera 0.7 (with libpisp and
+- **Driver and DTB**: `s5kc505a.ko` in `extra/` (jethac's driver with the flip controls libcamera uses to turn the
+  frame upright) and the camera DTB (`apq8053-lenovo-cd-18781y-camera.dtb`) in `/boot` **next to** the kernel
+  package's DTB, which stays as it is. lk2nd reads one entry and `fdtdir` wins over `fdt`, so `extlinux.conf` gets
+  `fdt /apq8053-lenovo-cd-18781y-camera.dtb` **instead of** `fdtdir /`, and `cma=128M` at the end of its `append`
+  line: 128 MB of contiguous memory instead of the kernel's default 32 MB, which libcamera needs for full-size frames
+  (2560×1600 fails without it; the reservation does not change boot time or, in practice, free memory). A constant in
+  `build.sh` (`CAMERA_CMA`), not a setting. `/boot/extlinux/extlinux.conf.nocamera` is the file a `CAMERA=0` image
+  has (`fdtdir /`, no `cma=`), to go back (`cp` it over `extlinux.conf` and reboot). `build.sh` accepts only the
+  camera DTB whose sha256 is in `driver/s5kc505a/dtb.sha256`, on top of a `boot.tar` whose DTB is the one it was
+  patched from: the DTB is what lk2nd boots, and a DTB that does not boot needs someone at the device.
+- **libcamera 0.7.1 from trixie-backports**: `libcamera0.7`, `libcamera-ipa` (the software ISP of the `simple`
+  pipeline handler, debayering on the GPU through `mesa-freedreno`) and `gstreamer1.0-libcamera` (`libcamerasrc`);
+  their dependencies, `v4l-utils` and `gstreamer1.0-tools` (`gst-launch-1.0`) from trixie; no recommends, no Debian
+  Mesa. trixie's own libcamera 0.4 debayers on the CPU and does not follow the sensor's flips. The image keeps
+  `/etc/apt/sources.list.d/debian-backports.sources` (trixie-backports at Debian's default priority, no pin): `apt
+  upgrade` updates these three packages from there and takes nothing else from it unless asked
+  (`apt install <package>/trixie-backports`).
+- **Without root**: `/etc/udev/rules.d/70-camera-dma-heap.rules` gives group `video` the dma-buf heaps
+  (`/dev/dma_heap/*`, root only by default). A program that is not root needs groups `video` and `render` (the GPU
+  debayer opens `/dev/dri/renderD128`): `SupplementaryGroups=video render` in its unit. The image adds no user to
+  them.
+
+With `CAMERA=0` the image is the same as without the option.
+
+### Tested
+
+On one device. A `CAMERA=1` image (`WEB=1 AIRPLAY=1 CAMERA=1`, 451 packages) of commit 3a88a34, which had jethac's
+driver without flip controls and libcamera 0.4, was written to the device and booted: lk2nd booted the camera DTB, no
+failed units, `CmaTotal` 131072 kB, the sensor found, a raw frame and libcamera at 2560×1600, boot 13.1 s. Everything
+added after that commit (the flip controls, libcamera 0.7.1, the `dma_heap` rule, the boot report) was then installed
+on that device by hand with the steps of [Upgrading without reflashing](#upgrading-without-reflashing), and works
+there: upright frames, about 25 fps at 1280×960 and 14 fps at 2560×1600, a user without privileges in groups `video`
+and `render` streams 2560×1600, boot about 14 s with the boot report running.
+**An image built from the current code has passed `verify.sh` (test builds with fake data) but has not been written
+to a device yet.**
+
+Measured on test builds of v0.4 (same configuration otherwise): `CAMERA=1` adds 25 packages and 62 MB to the plain
+image (218 → 243 packages, root 472 → 534 MB, `.img.gz` 183 → 202 MB): 5 for `v4l-utils`, 20 for libcamera 0.7 (with libpisp and
 three Boost libraries), GStreamer's core and base library, liblttng-ust and libyuv. With `WEB=1`, which already has
 GStreamer, 19 packages and 27 MB (304 → 323, 777 → 804 MB). It does not include GStreamer's plugins: `videoconvert`
 (`gstreamer1.0-plugins-base`) and `videoflip` (`gstreamer1.0-plugins-good`) pull X11 libraries, cairo, PulseAudio
@@ -216,14 +227,83 @@ and the AirPlay runtime are off too).
 - `ssh root@<device>`; versions in `/etc/thinksmart-version`.
 - Volume at boot: `/etc/default/thinksmart-audio` (or write the percent to `/var/lib/thinksmart/volume`).
 - Boot times: `journalctl -t thinksmart-boot` (one line per boot, `SLOW` ones with details; settings in
-  `/etc/default/thinksmart-boot-report`, [docs/boot.md](../docs/boot.md#boot-report)). On a device whose image does
-  not have it yet (before v0.4-rc2), install it by hand: copy `rootfs/usr/local/sbin/thinksmart-boot-report` (mode
-  0755), `rootfs/etc/systemd/system/thinksmart-boot-report.service`,
-  `rootfs/etc/systemd/system/thinksmart-boot-report-done.service` and `rootfs/etc/default/thinksmart-boot-report` to
-  the same paths, then `systemctl daemon-reload && systemctl enable thinksmart-boot-report
-  thinksmart-boot-report-done` (the next boot reports; `systemctl start thinksmart-boot-report` reports the current
-  one within ten seconds).
+  `/etc/default/thinksmart-boot-report`, [docs/boot.md](../docs/boot.md#boot-report)).
 - `apt upgrade` is fine: Debian packages do not touch `/boot` or the 7.1.3 modules.
+
+## Upgrading without reflashing
+
+### From v0.3 to v0.4
+
+Every step below was done by hand on a device (the faster boot: 24.2 s → 13.8 s). On every device:
+
+1. The longer `/boot` timeout: `sed -i 's/x-systemd.device-timeout=15/x-systemd.device-timeout=90/' /etc/fstab &&
+   systemctl daemon-reload`.
+2. The faster boot: `deviceinfo_no_framebuffer=true` at the end of the `append` line of `extlinux.conf`. A broken
+   `append` line (a cut line, a lost UUID) means the initramfs does not find the root file system and someone has to
+   recover the device over USB: p1 rewritten over EDL ([docs/flashing.md](../docs/flashing.md#seeing-why-an-image-does-not-boot)),
+   or lk2nd's `fastboot boot` of a copy of the old `/boot` (copy it to another machine first; the recipe is in
+   [driver/s5kc505a](../driver/s5kc505a/README.md#trying-it-without-writing-to-the-device-not-tried-yet), not tried
+   on a device yet). So do not edit the file in place: write a new one, check it, then move it over the old one:
+
+   ```sh
+   cd /boot/extlinux
+   grep -q deviceinfo_no_framebuffer extlinux.conf && echo "already there: stop here"
+   sed '/^[[:space:]]*append /s/$/ deviceinfo_no_framebuffer=true/' extlinux.conf > extlinux.conf.new && sync
+   wc -l extlinux.conf extlinux.conf.new     # the same number of lines
+   diff extlinux.conf extlinux.conf.new      # exactly one changed line: the append line, now ending with the parameter
+   # only if both checks are right:
+   mv extlinux.conf.new extlinux.conf && sync
+   ```
+
+   After the next reboot `journalctl -b | grep -i framebuffer` shows the initramfs's `NOTE: Skipping framebuffer setup
+   (deviceinfo_no_framebuffer)` instead of `ERROR: /dev/fb0 did not appear after waiting 10 seconds!`, and
+   `systemd-analyze` says about 14 s. `extlinux.conf.nocamera`, if there is one, gets the same change the same way.
+3. The boot report: copy, from `image/` of this repository, `rootfs/usr/local/sbin/thinksmart-boot-report` (mode 0755),
+   `rootfs/etc/systemd/system/thinksmart-boot-report.service`,
+   `rootfs/etc/systemd/system/thinksmart-boot-report-done.service` and `rootfs/etc/default/thinksmart-boot-report` to
+   the same paths, then `systemctl daemon-reload && systemctl enable thinksmart-boot-report
+   thinksmart-boot-report-done` (`systemctl start thinksmart-boot-report` reports the current boot within ten
+   seconds).
+
+For the front camera, also:
+
+4. The module, the camera DTB, `fdt` and `cma=128M`, as in
+   [driver/s5kc505a](../driver/s5kc505a/README.md#installing) (that page also says how to go back). The module is the
+   CI artifact `s5kc505a-7.1.3-msm8953` or built as in [driver/s5kc505a](../driver/s5kc505a/README.md#building).
+5. libcamera 0.7.1 from trixie-backports and the `dma_heap` rule:
+
+   ```sh
+   cat > /etc/apt/sources.list.d/debian-backports.sources <<'EOF'
+   Types: deb
+   URIs: http://deb.debian.org/debian
+   Suites: trixie-backports
+   Components: main
+   Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
+   EOF
+   apt update
+   apt install --no-install-recommends v4l-utils libcamera0.7/trixie-backports libcamera-ipa/trixie-backports \
+       gstreamer1.0-libcamera/trixie-backports gstreamer1.0-tools    # read the list: no Debian Mesa, nothing removed
+   echo 'SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"' > /etc/udev/rules.d/70-camera-dma-heap.rules
+   udevadm control --reload && udevadm trigger --subsystem-match=dma_heap
+   ```
+
+Then `systemctl reboot`. After it, `cat /proc/cmdline` ends with `deviceinfo_no_framebuffer=true`. With the camera
+it ends with `cma=128M` after it, `grep CmaTotal /proc/meminfo` says 131072 kB, `v4l2-ctl -d <sensor subdevice> -l`
+lists `horizontal_flip` and `vertical_flip`, `ls -l /dev/dma_heap` shows group `video`, and `libcamerasrc` frames are
+upright. Programs that are not root: groups `video` and `render` (`SupplementaryGroups=video render` in their unit,
+or `usermod -aG video,render <user>`).
+
+### From v0.4-rc1
+
+v0.4-rc1 was published as a pre-release with the camera driver without flip controls, trixie's libcamera 0.4 (frames
+upside down), no `cma=` and none of steps 1-3. Do steps 1-3. With the camera, the DTB and `fdt` are already right (the
+DTB has not changed since); stop programs that use the camera, replace the module (`install -m 644 s5kc505a.ko
+/usr/lib/modules/7.1.3-msm8953/extra/s5kc505a.ko && depmod -a 7.1.3-msm8953`), add `cma=128M` at the end of the
+`append` line with step 2's commands (`cma=128M` in place of `deviceinfo_no_framebuffer=true`; not in
+`extlinux.conf.nocamera`), do step 5 and `apt purge libcamera0.4` if apt left it behind, then reboot.
+
+### Older versions
+
 - From v0.2 or earlier (Mesa in `/opt/mesa-freedreno`) to the Mesa package without reflashing (done on a device
   running v0.2: apt adds libglvnd0, libegl1, libgles2 and libwayland-client0; GPU programs then use the new Mesa
   with no other change; stop them first, restart them after): copy the `.deb` over, then
@@ -234,63 +314,3 @@ and the AirPlay runtime are off too).
   as in [driver/venus](../driver/venus/README.md#building). For the AirPlay runtime, `apt install
   --no-install-recommends` the packages of `AIRPLAY_PACKAGES` in `build.sh`, then the
   `gstreamer1.0-plugins-bad-airplay_*_arm64.deb` an `AIRPLAY=1` build leaves in `$WORK_DIR/out/`.
-- From v0.3 to v0.4-rc1 without reflashing: nothing changes unless you want the front camera. For it, install the
-  module and the camera DTB by hand as in [driver/s5kc505a](../driver/s5kc505a/README.md#installing) (that page also
-  says how to go back), then libcamera as in the next item (the 0.4 packages of rc1 are replaced there).
-- From v0.4-rc1 to v0.4-rc2 without reflashing (all three done by hand on a device): the longer `/boot` timeout, on every
-  device, then `systemctl daemon-reload`:
-  `sed -i 's/x-systemd.device-timeout=15/x-systemd.device-timeout=90/' /etc/fstab`. With the camera, `cma=128M` on
-  the kernel command line for libcamera at full size, then reboot (keep `extlinux.conf.nocamera` without it):
-  `grep -q ' cma=' /boot/extlinux/extlinux.conf || sed -i '/^[[:space:]]*append /s/$/ cma=128M/' /boot/extlinux/extlinux.conf`.
-  `cat /proc/cmdline` shows it after the reboot, `grep CmaTotal /proc/meminfo` says 131072 kB.
-  The faster boot of rc2, on every device (done by hand on a device: 24.2 s → 13.8 s): `deviceinfo_no_framebuffer=true`
-  at the end of the `append` line. A broken `append` line (a cut line, a lost UUID) means the initramfs does not find
-  the root file system and someone has to recover the device over USB: lk2nd's `fastboot boot` of a copy of the old
-  `/boot` (copy it to another machine first; the recipe is in
-  [driver/s5kc505a](../driver/s5kc505a/README.md#trying-it-without-writing-to-the-device-not-tried-yet), not tried on
-  a device yet) or p1 rewritten over EDL ([docs/flashing.md](../docs/flashing.md#seeing-why-an-image-does-not-boot)).
-  So do not edit the file in place: write a new one, check it, then move it over the old one (the order of `cma=` and
-  the new parameter does not matter):
-
-  ```sh
-  cd /boot/extlinux
-  grep -q deviceinfo_no_framebuffer extlinux.conf && echo "already there: stop here"
-  sed '/^[[:space:]]*append /s/$/ deviceinfo_no_framebuffer=true/' extlinux.conf > extlinux.conf.new && sync
-  wc -l extlinux.conf extlinux.conf.new     # the same number of lines
-  diff extlinux.conf extlinux.conf.new      # exactly one changed line: the append line, now ending with the parameter
-  # only if both checks are right:
-  mv extlinux.conf.new extlinux.conf && sync
-  systemctl reboot
-  ```
-
-  After the reboot `journalctl -b | grep -i framebuffer` shows the initramfs's `NOTE: Skipping framebuffer setup
-  (deviceinfo_no_framebuffer)` instead of `ERROR: /dev/fb0 did not appear after waiting 10 seconds!`, and
-  `systemd-analyze` says about 14 s. `extlinux.conf.nocamera`, if there is one, can get the same change the same way
-  (the images of rc2 have it there too).
-
-  With the camera, also the flip driver, libcamera 0.7.1 and the `dma_heap` rule (done by hand on a device running a
-  `CAMERA=1` image of rc2's earlier commit 3a88a34): the rebuilt `s5kc505a.ko` (CI artifact `s5kc505a-7.1.3-msm8953`,
-  or [driver/s5kc505a](../driver/s5kc505a/README.md#building)) replaces the old one, and the reboot at the end loads it
-  (stop programs that use the camera first):
-
-  ```sh
-  install -m 644 s5kc505a.ko /usr/lib/modules/7.1.3-msm8953/extra/s5kc505a.ko && depmod -a 7.1.3-msm8953
-  cat > /etc/apt/sources.list.d/debian-backports.sources <<'EOF'
-  Types: deb
-  URIs: http://deb.debian.org/debian
-  Suites: trixie-backports
-  Components: main
-  Signed-By: /usr/share/keyrings/debian-archive-keyring.gpg
-  EOF
-  apt update
-  apt install --no-install-recommends libcamera0.7/trixie-backports libcamera-ipa/trixie-backports \
-      gstreamer1.0-libcamera/trixie-backports gstreamer1.0-tools    # read the list: no Debian Mesa, nothing removed
-  apt purge libcamera0.4                                              # if apt left it behind
-  echo 'SUBSYSTEM=="dma_heap", GROUP="video", MODE="0660"' > /etc/udev/rules.d/70-camera-dma-heap.rules
-  udevadm control --reload && udevadm trigger --subsystem-match=dma_heap
-  systemctl reboot
-  ```
-
-  After it, `v4l2-ctl -d <sensor subdevice> -l` lists `horizontal_flip` and `vertical_flip`, `ls -l /dev/dma_heap`
-  shows group `video`, and `libcamerasrc` frames are upright. Programs that are not root: groups `video` and
-  `render` (`SupplementaryGroups=video render` in their unit, or `usermod -aG video,render <user>`).

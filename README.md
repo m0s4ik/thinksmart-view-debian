@@ -37,14 +37,14 @@ application:
 | 🪶 **~190 MB of RAM** | used by the whole system, kernel included, with no application running: ~1.7 GB left for yours |
 | 📦 **~220 Debian packages** | ~470 MB on disk with kernel modules and GPU drivers; the compressed image is ~185 MB |
 | ⚙️ **A handful of services** | systemd, journald, udev, NetworkManager, wpa_supplicant, ssh, timesyncd, nftables, avahi (mDNS), plus the audio and light sensor setup. No desktop, no display server, no browser |
-| ⏱️ **~14 s boot** | 6 s kernel and initramfs, 8 s userspace (`systemd-analyze`; 24 s before v0.4-rc2) |
+| ⏱️ **~14 s boot** | 6 s kernel and initramfs, 8 s userspace (`systemd-analyze`; 24 s in v0.3) |
 | 🎮 **GPU without the weight** | Mesa built for this GPU only and without LLVM: ~22 MB instead of the ~170 MB of Debian's Mesa |
 | 🧱 **Plain Debian** | apt and Debian's security updates, systemd, nothing custom to learn; the whole image comes from one script you can read |
 
 <sub>RAM measured on our device on 2026-11-04, right after flashing v0.1, with no application running (the picture
-above; v0.1 had 208 packages, before avahi). Boot time: the same device on 2026-11-11, with v0.4-rc2's kernel command
-line. Packages and disk: a test build of v0.3-rc3 with the
-optional layers off.</sub>
+above; v0.1 had 208 packages, before avahi). Boot time: the same device on 2026-11-11, 13.1-14.1 s over about ten
+boots. Packages and disk: a test build of v0.3-rc3 with the optional layers off (the same on test builds of
+v0.4).</sub>
 
 ## What works
 
@@ -72,49 +72,40 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
 ## What's new in v0.4
 
 > [!IMPORTANT]
-> **Release candidate.** v0.4 adds the front camera as an option. A `CAMERA=1` image (`WEB=1 AIRPLAY=1 CAMERA=1`) of
-> an earlier commit (libcamera 0.4, driver without flips) has been flashed and booted on a device: no failed units,
-> the camera DTB and `cma=128M` in use, the sensor found, raw frames and libcamera at 2560×1600, boot in 13.1 s. The
-> flip controls, libcamera 0.7.1 and the `dma_heap` rule were then tried by hand on that device, not yet as a flashed
-> image. With `CAMERA=0` (the default) the image is the same as v0.3 (same packages and sizes on test builds) apart
-> from the faster boot and the longer `/boot` timeout of rc2.
+> **Not released yet.** Tested on one device; an image built from the current code has passed `verify.sh` but has
+> not been written to a device yet ([what was tested how](image/README.md#tested)).
 
 - **Faster boot, 24 s → 14 s**, on every image: `deviceinfo_no_framebuffer=true` on the kernel command line stops
   the postmarketOS initramfs from waiting 10 s for a framebuffer that cannot appear there. Nothing else in `/boot`
-  changes; measured on a device with `systemd-analyze` (13.1-13.8 s, 24.2 s before)
-  ([docs/boot.md](docs/boot.md#kernel-command-line)). *(rc2)*
-- **Front camera** (Samsung S5KC505A): jethac's out-of-tree sensor driver and a device tree patch that turns on
-  CAMSS and CCI, the camera rails and the sensor, with `rotation = <180>` (the read-out is upside down on the stand).
-  Raw RAW10 frames through V4L2; libcamera's `simple` pipeline with the software ISP and auto exposure
-  ([driver/s5kc505a](driver/s5kc505a/README.md)). *(rc1)*
-- **`CAMERA=1`** in `config.env` (off by default): the module, the camera DTB next to the original one, `fdt` in
-  `extlinux.conf` (the old file kept as `extlinux.conf.nocamera`), `v4l-utils` and libcamera, no Debian Mesa
+  changes; 13.1-14.1 s with `systemd-analyze` over about ten boots, 24.2 s before
+  ([docs/boot.md](docs/boot.md#kernel-command-line)).
+- **Front camera, optional** (Samsung S5KC505A): jethac's out-of-tree sensor driver with horizontal and vertical flip
+  controls added here, and a device tree patch that turns on CAMSS and CCI, the camera rails and the sensor, with
+  `rotation = <180>` (the read-out is upside down on the stand). libcamera 0.7.1 sets both flips from it and delivers
+  upright frames, debayered on the GPU: about 25 fps at 1280×960 and 14 fps at 2560×1600, colours acceptable without
+  tuning. Raw RAW10 frames through V4L2 up to the full 2608×1960 ([driver/s5kc505a](driver/s5kc505a/README.md)).
+- **`CAMERA=1`** in `config.env` (off by default): the module, the camera DTB next to the original one, `fdt` and
+  `cma=128M` in `extlinux.conf` (the old file kept as `extlinux.conf.nocamera`), `v4l-utils`, libcamera 0.7.1 and
+  `libcamerasrc` from trixie-backports (nothing else taken from there, no Debian Mesa), and a udev rule so that a
+  program in groups `video` and `render` uses the camera without root
   ([image/README.md](image/README.md#front-camera-optional)). `build.sh`, `verify.sh` and CI check both DTBs against
-  `driver/s5kc505a/dtb.sha256`. *(rc1)*
-- **Upright frames**: the driver gets horizontal and vertical flip controls (our change; the Bayer order follows
-  them), and libcamera turns the read-out in the sensor from the DT's rotation. *(rc2)*
-- **libcamera 0.7.1 from trixie-backports** instead of trixie's 0.4: debayering on the GPU, about 25 fps at 1280×960
-  and 14 fps at 2560×1600 (0.4: about 10 fps on the CPU), neutral colours without tuning. `CAMERA=1` keeps the
-  trixie-backports source at Debian's default priority (updates for these packages, nothing else taken from it) and
-  adds `cma=128M` to the kernel command line for full size (128 MB of contiguous memory instead of 32 MB; boot time
-  and free memory unchanged in practice). Raw frames at the full 2608×1960 work too
-  ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera)). *(rc2)*
-- **Camera without root**: a udev rule gives group `video` the dma-buf heaps; a program in groups `video` and
-  `render` streams (`SupplementaryGroups=video render` in its unit). *(rc2)*
+  `driver/s5kc505a/dtb.sha256`.
 - **Lens cover**: `driver/s5kc505a/lens-cover.py` prints whether the cover is open or closed
-  ([driver/s5kc505a](driver/s5kc505a/README.md#lens-cover)). *(rc2)*
-- **`/boot` device timeout 90 s** instead of 15 s, on every image: in one slow boot the device came up after 15 s and
-  `/boot` was left unmounted ([docs/boot.md](docs/boot.md)). *(rc2)*
+  ([driver/s5kc505a](driver/s5kc505a/README.md#lens-cover)).
 - **Boot report**, on every image: `thinksmart-boot-report.service` writes each boot's time, a small CPU benchmark,
   the CPU frequency and temperature to the journal in one line (`journalctl -t thinksmart-boot`); a slow boot is
   marked `SLOW` and gets the samples and CPU clock state taken while it was slow
-  ([docs/boot.md](docs/boot.md#boot-report)). *(rc2)*
+  ([docs/boot.md](docs/boot.md#boot-report)).
+- **`/boot` device timeout 90 s** instead of 15 s, on every image: in one slow boot the device came up after 15 s and
+  `/boot` was left unmounted ([docs/boot.md](docs/boot.md#headless-boot-the-emergency-mode-we-hit-and-fixed)).
 - **Build host tools**: `build.sh` also installs `systemd udev dmsetup nftables`, which `verify.sh` needs on the build
-  machine (in a bare `debian:trixie` container they were missing and 13 checks failed for that reason only), and
-  `verify.sh` stops with the names of missing tools instead. *(rc2)*
-- Known: no sensor tuning (colours acceptable, not calibrated), the lens cover switch does not cut the sensor's
-  power ([driver/s5kc505a](driver/s5kc505a/README.md#libcamera),
-  [known issues](docs/known-issues.md#camera)).
+  machine, and `verify.sh` run on its own stops with the names of missing tools.
+- Known: no sensor tuning, a one-pixel border in the wrong colour from the GPU debayer, the lens cover does not cut
+  the sensor's power ([known issues](docs/known-issues.md#camera)).
+
+With `CAMERA=0` (the default) the image has the same packages and sizes as v0.3 on test builds; only the faster boot,
+the boot report and the `/boot` timeout change. Upgrading a device in place:
+[image/README.md](image/README.md#upgrading-without-reflashing).
 
 v0.3 brought Mesa 26.3.0 in `/usr`, the optional web layer and AirPlay runtime, application firewall rules, mDNS, the
 hardware video decoder and 16-bit audio ([release notes](https://github.com/m0s4ik/thinksmart-view-debian/releases/tag/v0.3)).
@@ -153,7 +144,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 | [Boot](docs/boot.md) | image layout, system services, the headless-boot fixes |
 | [Hardware](docs/hardware.md) | panel, audio, Wi-Fi, sensors, keys, camera |
 | [Known issues](docs/known-issues.md) | what does not work (yet) |
-| [`image/`](image/README.md) | the build script, its options (web layer, AirPlay runtime) and customization hook |
+| [`image/`](image/README.md) | the build script, its options (web layer, AirPlay runtime, front camera), customization hook and upgrades in place |
 | [`driver/`](driver/) | the speaker driver ([tas5782m](driver/tas5782m/README.md)), the light sensor ([vcnl4000](driver/vcnl4000/README.md)), video decoder ([venus](driver/venus/README.md)) and front camera ([s5kc505a](driver/s5kc505a/README.md)) modules, the experimental [thinksmart-poweroff](driver/thinksmart-poweroff/README.md) |
 
 ## Roadmap
@@ -168,12 +159,10 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Mesa 26.3.0 final (v0.3)
 - [ ] Fix for the freedreno GMEM loop, proposed upstream
 - [ ] `poweroff` that stays off with the supply plugged in
-- [x] Faster boot: no initramfs framebuffer wait, 24 s → 14 s (v0.4-rc2)
+- [x] Faster boot: no initramfs framebuffer wait, 24 s → 14 s (v0.4)
 - [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
-- [x] Front camera (S5KC505A): raw frames and libcamera, optional (patched DTB)
-- [x] Camera in the image: `CAMERA=1` (v0.4-rc1; flashed and booted with rc2)
-- [x] libcamera at full size (`cma=128M`, v0.4-rc2)
-- [x] Upright camera frames (sensor flips) and libcamera 0.7 on the GPU (v0.4-rc2)
+- [x] Front camera (S5KC505A), optional (`CAMERA=1`): raw frames, upright frames through libcamera 0.7 on the GPU,
+  full size (v0.4)
 - [ ] Camera sensor tuning (colours are acceptable untuned with libcamera 0.7)
 - [ ] FT8201 panel variant
 
