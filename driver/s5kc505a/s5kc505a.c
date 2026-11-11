@@ -9,8 +9,14 @@
  * 0x0340/0x0342 frame/line length) and the tables are the same as the
  * vendor's S5K4E8 ones, apart from the chip ID and one init register.
  *
- * Output is RAW10 GRBG over two CSI-2 D-PHY data lanes at 960 Mb/s per lane
- * (480 MHz link frequency) from a 24 MHz external clock.
+ * Output is RAW10 over two CSI-2 D-PHY data lanes at 960 Mb/s per lane
+ * (480 MHz link frequency) from a 24 MHz external clock: GRBG as read out,
+ * another Bayer order when the image is mirrored or flipped.
+ *
+ * Written by Jetha Chan (jethac/lenovo-thinksmart-view, kernel patches 0402
+ * and 0404). thinksmart-view-debian adds the horizontal and vertical flip
+ * controls (register 0x0101) with the Bayer order that follows them, so that
+ * the read-out can be turned upright in the sensor.
  */
 
 #include <linux/clk.h>
@@ -49,6 +55,8 @@
 #define S5KC505A_REG_MODE_SELECT	CCI_REG8(0x0100)
 #define S5KC505A_MODE_STREAMING		0x01
 #define S5KC505A_REG_ORIENTATION	CCI_REG8(0x0101)
+#define S5KC505A_HFLIP			BIT(0)
+#define S5KC505A_VFLIP			BIT(1)
 
 #define S5KC505A_REG_EXTCLK_FREQ	CCI_REG16(0x0136)
 #define S5KC505A_EXTCLK_24MHZ		0x1800	/* 8.8 fixed point MHz */
@@ -82,6 +90,16 @@
 
 static const s64 s5kc505a_link_freq_menu[] = {
 	S5KC505A_LINK_FREQ,
+};
+
+/*
+ * Bayer order for each flip setting, indexed by vflip << 1 | hflip: the
+ * read-out window does not move when the sensor mirrors or flips, so the
+ * order changes with them (both flips give GBRG, checked on the device).
+ */
+static const u32 s5kc505a_mbus_formats[] = {
+	MEDIA_BUS_FMT_SGRBG10_1X10,	MEDIA_BUS_FMT_SRGGB10_1X10,
+	MEDIA_BUS_FMT_SBGGR10_1X10,	MEDIA_BUS_FMT_SGBRG10_1X10,
 };
 
 struct s5kc505a_reg_list {
@@ -138,6 +156,8 @@ struct s5kc505a {
 	struct v4l2_ctrl *hblank;
 	struct v4l2_ctrl *vblank;
 	struct v4l2_ctrl *exposure;
+	struct v4l2_ctrl *hflip;
+	struct v4l2_ctrl *vflip;
 
 	const struct s5kc505a_mode *mode;
 };
@@ -507,13 +527,36 @@ static const struct s5kc505a_mode s5kc505a_supported_modes[] = {
 	},
 };
 
+static u32 s5kc505a_get_format_code(struct s5kc505a *s5kc505a)
+{
+	unsigned int i;
+
+	i = (s5kc505a->vflip->val ? 2 : 0) | (s5kc505a->hflip->val ? 1 : 0);
+
+	return s5kc505a_mbus_formats[i];
+}
+
+static u32 s5kc505a_get_orientation(struct s5kc505a *s5kc505a)
+{
+	return (s5kc505a->vflip->val ? S5KC505A_VFLIP : 0) |
+	       (s5kc505a->hflip->val ? S5KC505A_HFLIP : 0);
+}
+
 static int s5kc505a_set_ctrl(struct v4l2_ctrl *ctrl)
 {
 	struct s5kc505a *s5kc505a = container_of(ctrl->handler,
 						 struct s5kc505a, ctrl_handler);
 	const struct s5kc505a_mode *mode = s5kc505a->mode;
+	struct v4l2_subdev_state *state;
 	s64 exposure_max;
 	int ret;
+
+	if (ctrl->id == V4L2_CID_HFLIP || ctrl->id == V4L2_CID_VFLIP) {
+		/* The Bayer order of the active format follows the flips */
+		state = v4l2_subdev_get_locked_active_state(&s5kc505a->sd);
+		v4l2_subdev_state_get_format(state, 0)->code =
+			s5kc505a_get_format_code(s5kc505a);
+	}
 
 	if (ctrl->id == V4L2_CID_VBLANK) {
 		exposure_max = mode->height + ctrl->val -
@@ -547,6 +590,11 @@ static int s5kc505a_set_ctrl(struct v4l2_ctrl *ctrl)
 		ret = cci_write(s5kc505a->regmap, S5KC505A_REG_TEST_PATTERN,
 				ctrl->val, NULL);
 		break;
+	case V4L2_CID_HFLIP:
+	case V4L2_CID_VFLIP:
+		ret = cci_write(s5kc505a->regmap, S5KC505A_REG_ORIENTATION,
+				s5kc505a_get_orientation(s5kc505a), NULL);
+		break;
 	case V4L2_CID_HBLANK:
 	case V4L2_CID_PIXEL_RATE:
 	case V4L2_CID_LINK_FREQ:
@@ -578,7 +626,7 @@ static int s5kc505a_init_controls(struct s5kc505a *s5kc505a)
 	s64 hblank, vblank, exposure_max;
 	int ret;
 
-	v4l2_ctrl_handler_init(hdl, 10);
+	v4l2_ctrl_handler_init(hdl, 12);
 
 	s5kc505a->link_freq =
 		v4l2_ctrl_new_int_menu(hdl, &s5kc505a_ctrl_ops,
@@ -623,6 +671,16 @@ static int s5kc505a_init_controls(struct s5kc505a *s5kc505a)
 				     V4L2_CID_TEST_PATTERN,
 				     ARRAY_SIZE(s5kc505a_test_pattern_menu) - 1,
 				     0, 0, s5kc505a_test_pattern_menu);
+
+	s5kc505a->hflip = v4l2_ctrl_new_std(hdl, &s5kc505a_ctrl_ops,
+					    V4L2_CID_HFLIP, 0, 1, 1, 0);
+	if (s5kc505a->hflip)
+		s5kc505a->hflip->flags |= V4L2_CTRL_FLAG_MODIFY_LAYOUT;
+
+	s5kc505a->vflip = v4l2_ctrl_new_std(hdl, &s5kc505a_ctrl_ops,
+					    V4L2_CID_VFLIP, 0, 1, 1, 0);
+	if (s5kc505a->vflip)
+		s5kc505a->vflip->flags |= V4L2_CTRL_FLAG_MODIFY_LAYOUT;
 
 	ret = v4l2_fwnode_device_parse(s5kc505a->dev, &props);
 	if (ret)
@@ -679,11 +737,16 @@ static int s5kc505a_enable_streams(struct v4l2_subdev *sd,
 	if (ret)
 		goto error;
 
-	cci_write(s5kc505a->regmap, S5KC505A_REG_ORIENTATION, 0, &ret);
+	cci_write(s5kc505a->regmap, S5KC505A_REG_ORIENTATION,
+		  s5kc505a_get_orientation(s5kc505a), &ret);
 	cci_write(s5kc505a->regmap, S5KC505A_REG_MODE_SELECT,
 		  S5KC505A_MODE_STREAMING, &ret);
 	if (ret)
 		goto error;
+
+	/* The Bayer order cannot change while streaming */
+	__v4l2_ctrl_grab(s5kc505a->hflip, true);
+	__v4l2_ctrl_grab(s5kc505a->vflip, true);
 
 	return 0;
 
@@ -705,15 +768,19 @@ static int s5kc505a_disable_streams(struct v4l2_subdev *sd,
 	if (ret)
 		dev_err(s5kc505a->dev, "failed to stop streaming: %d\n", ret);
 
+	__v4l2_ctrl_grab(s5kc505a->hflip, false);
+	__v4l2_ctrl_grab(s5kc505a->vflip, false);
+
 	pm_runtime_put_autosuspend(s5kc505a->dev);
 
 	return ret;
 }
 
-static void s5kc505a_update_pad_format(const struct s5kc505a_mode *mode,
+static void s5kc505a_update_pad_format(struct s5kc505a *s5kc505a,
+				       const struct s5kc505a_mode *mode,
 				       struct v4l2_mbus_framefmt *fmt)
 {
-	fmt->code = MEDIA_BUS_FMT_SGRBG10_1X10;
+	fmt->code = s5kc505a_get_format_code(s5kc505a);
 	fmt->width = mode->width;
 	fmt->height = mode->height;
 	fmt->field = V4L2_FIELD_NONE;
@@ -737,7 +804,7 @@ static int s5kc505a_set_pad_format(struct v4l2_subdev *sd,
 				      width, height,
 				      fmt->format.width, fmt->format.height);
 
-	s5kc505a_update_pad_format(mode, &fmt->format);
+	s5kc505a_update_pad_format(s5kc505a, mode, &fmt->format);
 	*v4l2_subdev_state_get_format(state, 0) = fmt->format;
 	*v4l2_subdev_state_get_crop(state, 0) = mode->crop;
 
@@ -783,10 +850,12 @@ static int s5kc505a_enum_mbus_code(struct v4l2_subdev *sd,
 				   struct v4l2_subdev_state *state,
 				   struct v4l2_subdev_mbus_code_enum *code)
 {
+	struct s5kc505a *s5kc505a = to_s5kc505a(sd);
+
 	if (code->index > 0)
 		return -EINVAL;
 
-	code->code = MEDIA_BUS_FMT_SGRBG10_1X10;
+	code->code = s5kc505a_get_format_code(s5kc505a);
 
 	return 0;
 }
@@ -795,10 +864,12 @@ static int s5kc505a_enum_frame_size(struct v4l2_subdev *sd,
 				    struct v4l2_subdev_state *state,
 				    struct v4l2_subdev_frame_size_enum *fse)
 {
+	struct s5kc505a *s5kc505a = to_s5kc505a(sd);
+
 	if (fse->index >= ARRAY_SIZE(s5kc505a_supported_modes))
 		return -EINVAL;
 
-	if (fse->code != MEDIA_BUS_FMT_SGRBG10_1X10)
+	if (fse->code != s5kc505a_get_format_code(s5kc505a))
 		return -EINVAL;
 
 	fse->min_width = s5kc505a_supported_modes[fse->index].width;
