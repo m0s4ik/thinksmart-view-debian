@@ -1,14 +1,17 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: GPL-3.0-or-later
 # SPDX-FileCopyrightText: 2026 Andrea Mattera
-"""Turn one packed RAW10 GRBG frame (V4L2 'pgAA', as written by v4l2-ctl --stream-to) into a viewable PNG.
+"""Turn one packed RAW10 frame (as written by v4l2-ctl --stream-to) into a viewable PNG.
 
-Half resolution: one RGB pixel per 2x2 Bayer quad, black level subtracted, grey-world white balance, sRGB-like
-gamma, turned 180 degrees by default (the read-out is upside down with the device on its stand, landscape; the
-DT says rotation 180). Standard library only (runs on the device), a few seconds for a 1304x980 frame. A quick
-look, not an ISP.
+The Bayer order follows the sensor's flip controls: GRBG ('pgAA') as read out, RGGB ('pRAA') with horizontal_flip,
+BGGR ('pBAA') with vertical_flip, GBRG ('pGAA') with both. The read-out is upside down with the device on its stand
+(landscape; the DT says rotation 180): capture with both flips and --bayer gbrg for an upright picture, or without
+flips and --rotation 180. Half resolution: one RGB pixel per 2x2 Bayer quad, black level subtracted, grey-world
+white balance, sRGB-like gamma. Standard library only (runs on the device), a few seconds for a 1304x980 frame. A
+quick look, not an ISP.
 
-usage: raw10-to-png.py <frame.raw> <width> <height> <out.png> [--stride N] [--rotation 0|90|180|270] [--frame N]
+usage: raw10-to-png.py <frame.raw> <width> <height> <out.png> [--bayer grbg|rggb|bggr|gbrg] [--stride N]
+                       [--rotation 0|90|180|270] [--frame N]
 """
 import argparse
 import struct
@@ -17,6 +20,8 @@ import zlib
 
 BLACK = 64
 WHITE = 1023
+# 2x2 quad of each Bayer order, row by row
+BAYER = ("grbg", "rggb", "bggr", "gbrg")
 
 
 def unpack_row(buf):
@@ -63,9 +68,11 @@ def main():
     ap.add_argument("height", type=int)
     ap.add_argument("out")
     ap.add_argument("--stride", type=int, help="bytes per line (default: width*10/8 rounded up to 8)")
-    ap.add_argument("--rotation", type=int, default=180,
-                    help="clockwise turn applied to the image (default 180: upright with the device on its stand; "
-                         "0 = the sensor's read-out as it is)")
+    ap.add_argument("--bayer", choices=BAYER, default="grbg",
+                    help="colour order of the frame (default grbg: no flips; gbrg with both flips)")
+    ap.add_argument("--rotation", type=int, default=0,
+                    help="clockwise turn applied to the image (default 0; 180 for a frame captured without flips, "
+                         "upright then with the device on its stand)")
     ap.add_argument("--frame", type=int, default=0, help="frame index when the file holds several")
     a = ap.parse_args()
 
@@ -80,17 +87,24 @@ def main():
     line = a.width * 10 // 8
 
     hw, hh = a.width // 2, a.height // 2
+    # offset (row * 2 + column) of R, B and the two G in each quad
+    ri, bi = a.bayer.index("r"), a.bayer.index("b")
+    g0, g1 = [i for i, c in enumerate(a.bayer) if c == "g"]
     quads = []
     sums = [0, 0, 0]
     for y in range(hh):
         r0 = unpack_row(data[(2 * y) * stride:(2 * y) * stride + line])
         r1 = unpack_row(data[(2 * y + 1) * stride:(2 * y + 1) * stride + line])
+        rows = (r0, r1)
+
+        def plane(i):  # the samples at quad offset i along this pair of lines
+            return rows[i >> 1][i & 1:2 * hw:2]
+
         row = []
-        for x in range(hw):
-            # GRBG: G R / B G
-            g = (r0[2 * x] + r1[2 * x + 1]) / 2 - BLACK
-            r = r0[2 * x + 1] - BLACK
-            b = r1[2 * x] - BLACK
+        for rs, ga, gb, bs in zip(plane(ri), plane(g0), plane(g1), plane(bi)):
+            g = (ga + gb) / 2 - BLACK
+            r = rs - BLACK
+            b = bs - BLACK
             row.append((max(r, 0), max(g, 0), max(b, 0)))
             sums[0] += r
             sums[1] += g
