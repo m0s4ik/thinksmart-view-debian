@@ -1,20 +1,15 @@
 # S5KC505A front camera (driver + device tree)
 
-**Status: raw frames work on the 7.1.3 kernel of this system** (one device, 2026-11-10): installed as below (module in
-`extra/`, camera DTB next to the original, `fdt` in `extlinux.conf`; `cma=128M` since 2026-11-11), udev loads
-`i2c-qcom-cci`, `s5kc505a` and `qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene
-captured through CAMSS with `v4l2-ctl`, no errors in the kernel log. Boot time unchanged by the camera (24.2 s, 13.8 s
-with v0.4-rc2's command line); one isolated slow boot is still unexplained and its logs point to the CPU clock, not
-to the camera ([known-issues.md](../../docs/known-issues.md#boot)). The read-out is upside down on the stand, so the
-DT says `rotation = <180>`, and the driver here has flip controls: libcamera 0.7.1 (trixie-backports) sets both flips
-from that rotation and delivers **upright** frames with plausible colours, debayered on the GPU, about 25 fps at
-1280x960 and 14 fps at 2560x1600 (`cma=128M` on the kernel command line for full size; [below](#libcamera)). Raw
-frames also at the full 2608x1960. The camera needs a patched DTB, so it is optional: `CAMERA=1` in
-`image/config.env` builds it into the image together with libcamera
-([image/README.md](../../image/README.md#front-camera-optional); an image of an earlier commit, with jethac's driver
-without flips and libcamera 0.4, flashed and booted on one device, 2026-11-11: camera DTB and `cma=128M` in use, chip
-ID at 10.5 s, a raw 1304x980 frame, libcamera at 2560x1600, boot 13.1 s; the flip driver, libcamera 0.7.1 and the
-dma_heap rule were then installed by hand on that device), or install it by hand as below.
+**Status: works on the 7.1.3 kernel of this system** (one device, 2026-11-10 and 11): udev loads `i2c-qcom-cci`,
+`s5kc505a` and `qcom-camss` at boot, the sensor answers with chip ID 0x5034, test pattern and real scene captured
+through CAMSS with `v4l2-ctl` up to the full 2608x1960, no errors in the kernel log, boot time unchanged by the camera
+(about 14 s). The read-out is upside down on the stand, so the DT says `rotation = <180>`, and the driver here has
+flip controls: libcamera 0.7.1 (trixie-backports) sets both flips from that rotation and delivers **upright** frames
+with acceptable colours, debayered on the GPU, about 25 fps at 1280x960 and 14 fps at 2560x1600 (`cma=128M` on the
+kernel command line for full size; [below](#libcamera)). The camera needs a patched DTB, so it is optional:
+`CAMERA=1` in `image/config.env` builds it into the image together with libcamera
+([image/README.md](../../image/README.md#front-camera-optional), which also says what was tested as a written image
+and what by hand), or install it by hand as below.
 
 The ThinkSmart View's front camera is a Samsung **S5KC505A** (5 Mpixel, RAW10 GRBG, 2 CSI-2 lanes at 480 MHz, 24 MHz
 MCLK) on the camera I²C controller (CCI) of the SoC. Two pieces are needed on top of the frozen 7.1.3 kernel:
@@ -60,8 +55,8 @@ Notes:
 - The Lenovo DTB's pin state `cam_sensor_rear_vdig` configures GPIO 134, not 118: it is left over from Qualcomm's
   reference board; the line the Lenovo driver drives is the `gpios` entry, GPIO 118.
 - **Rotation.** `video-interface-devices.yaml` defines `rotation` between the sensor's read-out and the scene. With
-  the device on its stand (landscape, as it is used) the read-out is **upside down**: raw frames (`media-ctl` and
-  `v4l2-ctl`) and libcamera frames alike. So the patch sets `rotation = <180>`. Lenovo's `qcom,mount-angle = <270>` is
+  the device on its stand (landscape, as it is used) the read-out is **upside down** (raw frames without flips,
+  through `media-ctl` and `v4l2-ctl`). So the patch sets `rotation = <180>`. Lenovo's `qcom,mount-angle = <270>` is
   relative to the panel's native portrait orientation (800x1280), an Android convention, and jethac's DT patch has
   270 too: wrong for landscape. An earlier version of this patch had 0, judged on a dim frame: also wrong. The
   sensor turns the image itself: the driver has `horizontal_flip` and `vertical_flip` (register 0x0101), and
@@ -70,8 +65,10 @@ Notes:
   read-out window does not move): GRBG without flips, RGGB with `horizontal_flip`, BGGR with `vertical_flip`, GBRG
   with both (all four checked on the device with raw frames); the driver reports the current order on its pad, the controls carry
   `V4L2_CTRL_FLAG_MODIFY_LAYOUT` and cannot change while streaming.
-- Measured on the device: RPM reports L2 at 1.200 V, the PMIC's own register (read through the SPMI regulator
-  driver) at **1.175 V**. Lower than requested, so on the safe side; why they differ is not known yet.
+- Read on the device (2026-11-11, not measured with a meter): the RPM regulator `l2` reports 1.200 V, which is what
+  is requested and what the consumer `cam_vddd` sees; the read-only SPMI view of the same LDO decodes its register as
+  1.175 V. The other two camera rails agree in both views (1.8 V, 2.85 V). Most likely the SPMI driver decodes this
+  LDO type one step (25 mV) differently, not a low rail.
 - Power-up order in the driver (from the Lenovo library): reset and standby low, VANA, VDIG, VIO, MCLK, reset high,
   standby high.
 
@@ -130,7 +127,8 @@ install -m 644 apq8053-lenovo-cd-18781y-camera.dtb /boot/
 sed -i 's|^\([[:space:]]*\)fdtdir /$|\1fdt /apq8053-lenovo-cd-18781y-camera.dtb|' /boot/extlinux/extlinux.conf
 grep -q ' cma=' /boot/extlinux/extlinux.conf || sed -i '/^[[:space:]]*append /s/$/ cma=128M/' /boot/extlinux/extlinux.conf
 install -m 644 s5kc505a.ko /usr/lib/modules/7.1.3-msm8953/extra/ && depmod -a 7.1.3-msm8953
-sync && systemctl reboot
+diff /boot/extlinux/extlinux.conf.nocamera /boot/extlinux/extlinux.conf   # exactly two changed lines: fdt, and append ending in cma=128M
+sync && systemctl reboot     # only if the diff is right
 ```
 
 `cma=128M` reserves contiguous memory for libcamera's full-size buffers ([below](#libcamera)); raw frames through

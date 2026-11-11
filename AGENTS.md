@@ -40,7 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
-| `driver/s5kc505a/` | optional front camera: jethac's sensor driver with our flip controls (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env` (flashed and booted on one device), or by hand |
+| `driver/s5kc505a/` | optional front camera: jethac's sensor driver with our flip controls (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env`, or by hand |
 
 ## Commands and the checks that must pass
 
@@ -77,7 +77,7 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
 - The `append` line ends with `deviceinfo_no_framebuffer=true` (then `cma=128M` with `CAMERA=1`): it saves the
   initramfs's 10 s wait for `/dev/fb0`, keep it. A broken `append` line means no root file system and someone at the
   device: change `extlinux.conf` only by writing a new file and checking it first
-  ([image/README.md](image/README.md#after-the-first-boot)), and ask before rebooting.
+  ([image/README.md](image/README.md#upgrading-without-reflashing)), and ask before rebooting.
 - `SYSTEM_SECTORS` must equal the `system` partition size after repartitioning, or the image does not fit / boot.
 - The USB-C port has no CC resistors: if EDL does not see the device, suggest a USB-A to USB-C cable.
 - Mesa lives in `/usr` as the package `mesa-freedreno`, which provides `libgbm1`, `libegl-mesa0` and `libglx-mesa0`:

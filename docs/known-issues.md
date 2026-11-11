@@ -36,40 +36,33 @@
 
 ## Boot
 
-- **Boot time**: about 14 s (`systemd-analyze`). Until v0.4-rc1 the postmarketOS initramfs lost 10 s waiting for
-  `/dev/fb0`, which cannot appear there (no modules in it); since v0.4-rc2 `deviceinfo_no_framebuffer=true` on the
+- **Boot time**: about 14 s (`systemd-analyze`). Up to v0.3 the postmarketOS initramfs lost 10 s waiting for
+  `/dev/fb0`, which cannot appear there (no modules in it); since v0.4 `deviceinfo_no_framebuffer=true` on the
   kernel command line skips the wait, with no change to the initramfs ([boot.md](boot.md#kernel-command-line)). The
   largest pieces left are in files the image takes as they are: ~2 s before the initramfs's udev starts (it ends at
   `random: crng init done`), `check_keys` (~1 s, a `sleep 1`), the sub-partition mapping (~1 s), and
   `msm-firmware-loader.service` (2.5 s, ordered before udev, so hardware probing waits for it). Not planned yet;
   timeline in [boot.md](boot.md#boot-time).
-- **Open: one slow boot (85 s), seen once in more than eight boots and not reproduced.** Compared with the journals
-  of normal boots (kernel timestamps), it is identical up to ~0.95 s; from there the CPU was slow: steps bound by the
-  CPU took 18-27 times longer, those bound by I/O ~1.5 times, and only in that boot systemd logged more than a second
-  of CPU time for trivial units (`modprobe@configfs.service: Consumed 1.296s CPU time`). 8 CPUs online, as in the
-  other boots; no thermal or throttling messages (temperatures are never logged). The first difference: `cpufreq-dt`
-  came online (0.952 s) before the late initcalls `clk: Disabling unused clocks` and `PM: genpd: Disabling unused
-  power domains` (1.008 s); in the six normal 7.1.3 boots it is the other way round (unused clocks off at ~0.87 s,
-  cpufreq at 0.96-0.98 s). One older normal boot had the same order as the slow one with only a ~0.3 s hiccup, so the
-  order alone does not explain it. Speed came back abruptly at 81.555 s, at `remoteproc0: adsp is available`; nothing
-  in the log says what changed. Most likely a probe-order race between cpufreq-dt/CPR and the clean-up of unused
-  clocks and power domains that left the CPUs clocked from a slow source: not proven. Not related, as far as the logs
-  show: the camera DTB's `rotation`, `kernel.panic` set at run time, `modprobe -i`. It came right after the first
-  camera session (captures, then a warm reboot), which cannot be excluded, but two reboots after captures were
-  normal. Side effect: the `/boot` device came up after the 15 s `x-systemd.device-timeout` of fstab and `/boot` was
-  not mounted (`systemctl start boot.mount` mounts it once the device is there); since v0.4-rc2 the timeout is 90 s
-  (on an older device edit `/etc/fstab` as in [image/README.md](../image/README.md#after-the-first-boot)).
-  **If it happens again** (`systemd-analyze` far above 14 s), keep the journal (it is on disk) and, from the same
-  boot: the order of `cpufreq_policy_online`/`cpufreq-dt` against `Disabling unused clocks` in `dmesg`; and, if it
-  is still slow when ssh answers (in the one slow boot speed came back at 81.5 s, shortly before the end),
-  `cpuinfo_cur_freq` against `scaling_cur_freq` in `/sys/devices/system/cpu/cpu*/cpufreq/`, the lines of the CPU
-  clocks in `/sys/kernel/debug/clk/clk_summary` (`mount -t debugfs none /sys/kernel/debug`) and
-  `/sys/class/thermal/thermal_zone*/temp`. Since v0.4-rc2 the image records this by itself: `thinksmart-boot-report`
-  writes every boot's time to the journal (`journalctl -t thinksmart-boot`), and a boot above 30 s, or one in which
-  the CPU benchmark slows down five times or more, is marked `SLOW` and followed by the samples taken every second
-  while it was slow (benchmark, `scaling_cur_freq`/`cpuinfo_cur_freq`) and the CPU clocks, cpufreq statistics, CPU
-  power domains and temperatures as they were then, plus the order of the two kernel messages
-  ([boot.md](boot.md#boot-report)).
+- **Open: one slow boot (85 s), seen once and not reproduced** (about ten boots since the framebuffer-wait fix, all
+  13.1-14.1 s). Compared with the journals of normal boots (kernel timestamps), it is identical up to ~0.95 s; from
+  there the CPU was slow: steps bound by the CPU took 18-27 times longer, those bound by I/O ~1.5 times, and only in
+  that boot systemd logged more than a second of CPU time for trivial units (`modprobe@configfs.service: Consumed
+  1.296s CPU time`). 8 CPUs online, as in the other boots; no thermal or throttling messages (temperatures were not
+  logged then). In that boot `cpufreq-dt` came online (0.952 s) before the late initcalls `clk: Disabling unused
+  clocks` and `PM: genpd: Disabling unused power domains` (1.008 s); most boots have the other order (unused clocks
+  off at ~0.87 s, cpufreq at 0.96-0.98 s), but the boot report has since seen the slow boot's order in roughly one
+  boot in four or five without a slow boot (cpufreq 1.0019 s, unused clocks off 1.0082 s, boot 13.4 s): the order is
+  not sufficient. Speed came back abruptly at 81.555 s, at `remoteproc0: adsp is available`; nothing in the log says
+  what changed. Most likely a probe-order race between cpufreq-dt/CPR and the clean-up of unused clocks and power
+  domains that left the CPUs clocked from a slow source: not proven. Not related, as far as the logs show: the camera
+  DTB's `rotation`, `kernel.panic` set at run time, `modprobe -i`. It came right after the first camera session
+  (captures, then a warm reboot), which cannot be excluded, but two reboots after captures were normal. Side effect:
+  the `/boot` device came up after the 15 s `x-systemd.device-timeout` of fstab and `/boot` was not mounted
+  (`systemctl start boot.mount` mounts it once the device is there); since v0.4 the timeout is 90 s (on an older
+  device edit `/etc/fstab` as in [image/README.md](../image/README.md#upgrading-without-reflashing)).
+  **If it happens again**, the boot report has recorded it: `journalctl -t thinksmart-boot -p warning` lists the
+  `SLOW` boots, each followed by the samples taken while it was slow, the CPU clock state and the order of the two
+  kernel messages ([boot.md](boot.md#boot-report)). Keep that journal (it is on disk).
 - lk2nd supports a **single entry** in `extlinux.conf`.
 - **Volume Up at power-on is not a rescue path**: with a rescue boot image written to the `recovery` partition,
   holding Volume Up at power-on did not boot it (tried once on one device, 2026-11-11: black screen, no Linux; cause
@@ -145,17 +138,17 @@
 
 ## Camera
 
-- With the camera installed (modules loaded by udev) the device boots as fast as without it: 24.2 s, also right after
-  a capture and a warm reboot (measured twice, 2026-11-10), and 13.8 s with the kernel command line of v0.4-rc2
-  (2026-11-11). A flashed `CAMERA=1` image of v0.4-rc2 (`WEB=1 AIRPLAY=1`) booted in 13.1 s and 13.2 s (one device,
-  2026-11-11). The one slow boot seen after the first camera session points to the CPU clock, not to the camera:
-  see [Boot](#boot).
+- The camera does not change boot time: about 14 s with it as without it (13.1 s on the first boot of a written
+  `CAMERA=1` image). The one slow boot seen after the first camera session points to the CPU clock, not to the
+  camera: see [Boot](#boot).
 - No sensor tuning: libcamera 0.7.1 falls back to `uncalibrated.yaml` and warns about missing sensor properties and
   helper; colours are acceptable (neutral on a white-ish scene), not calibrated.
+- The GPU debayer leaves a one-pixel border in the wrong colour (first row, first and last column): crop it if it
+  matters.
 - The sensor's flips change the Bayer order and keep the value the last program set (libcamera sets both): a raw
-  capture sets them first ([driver/s5kc505a](../driver/s5kc505a/README.md#capturing-a-raw-frame)). trixie's own
-  libcamera 0.4 does not follow the changing Bayer order (expected to fail at stream start with this driver, from its
-  code, not tried): use 0.7 from trixie-backports, as `CAMERA=1` does.
+  capture sets them first ([driver/s5kc505a](../driver/s5kc505a/README.md#capturing-a-raw-frame)). They cannot change
+  while streaming. trixie's own libcamera 0.4 does not follow the changing Bayer order (expected to fail at stream
+  start with this driver, from its code, not tried): use 0.7 from trixie-backports, as `CAMERA=1` does.
 - With libcamera 0.7.1, `multifilesink` wrote no file (no error, not investigated); `filesink` works.
 - The lens cover does not cut the sensor's power: software reads the switch before capturing
   ([lens cover](../driver/s5kc505a/README.md#lens-cover)).
@@ -164,11 +157,5 @@
 
 - The last seconds of boot time (entropy wait, `check_keys`, sub-partition mapping, `msm-firmware-loader`): they need
   changes to the initramfs or to the firmware loader ([Boot](#boot)).
-- Camera: raw frames work with a patched DTB and an extra module, installed by hand or as a `CAMERA=1` image
-  ([driver/s5kc505a](../driver/s5kc505a/README.md); an image without the flip controls and libcamera 0.7 flashed and
-  booted on one device, those two then tried by hand there); libcamera 0.7.1 streams full size (2560×1600 at about
-  14 fps, 2592×1944) only with `cma=128M` on the kernel command line (`CAMERA=1` adds it; the default 32 MB CMA is
-  enough for 1280×960), upright and with acceptable colours but no sensor tuning. A program that is not root needs
-  groups `video` and `render`. RPM reports the sensor's VDIG rail
-  (L2) at 1.200 V, the PMIC register at 1.175 V: not explained yet.
+- Camera sensor tuning ([Camera](#camera)).
 - A newer kernel (the image is frozen on 7.1.3).

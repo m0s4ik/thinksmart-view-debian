@@ -69,7 +69,7 @@ edl reset
 ```
 
 About 28 MB/s, ~4.5 minutes. The image contains its own MBR (p1 `/boot`, p2 root), relative to the start of
-`system`. First boot takes ~30 s; the device joins your Wi-Fi and accepts `ssh root@<device>` with your key.
+`system`. The first boot takes about 14 s like the others; the device then joins your Wi-Fi and accepts `ssh root@<device>` with your key.
 
 To update only the boot partition (kernel, DTB, extlinux) you can write p1 alone at its absolute offset. Cut p1 out
 of the image (it starts at sector 2048 of the image and is 497664 sectors long), then write it at

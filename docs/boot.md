@@ -28,7 +28,7 @@ plus
 - `consoleblank=0 vt.global_cursor_default=0`: no blanking, no cursor;
 - `quiet loglevel=0 systemd.show_status=0`: no kernel text on the screen while booting (an application can show its
   own splash, see below);
-- `deviceinfo_no_framebuffer=true` (since v0.4-rc2), last: the postmarketOS initramfs (3.7.2) waits for `/dev/fb0`
+- `deviceinfo_no_framebuffer=true` (since v0.4), last: the postmarketOS initramfs (3.7.2) waits for `/dev/fb0`
   in a loop of 100 × `sleep 0.1` before showing its splash, but it contains no kernel modules, so fb0 cannot appear
   there and every boot lost 10 s (`ERROR: /dev/fb0 did not appear after waiting 10 seconds!`). The kernel passes
   `name=value` parameters it does not know into the environment of `/init` (that is how `pmos_root_uuid` gets
@@ -40,20 +40,20 @@ plus
   full-size buffers ([driver/s5kc505a](../driver/s5kc505a/README.md#libcamera)).
 
 A broken `append` line (a lost UUID, a cut line) means the initramfs does not find the root file system: edit
-`extlinux.conf` with care ([image/README.md](../image/README.md#after-the-first-boot)).
+`extlinux.conf` with care ([image/README.md](../image/README.md#upgrading-without-reflashing)).
 
 ## Boot time
 
 `systemd-analyze` on a device: `Startup finished in 6.004s (kernel) + 7.836s (userspace) = 13.840s` with
-`deviceinfo_no_framebuffer=true` (a freshly flashed `CAMERA=1` image of v0.4-rc2: `5.979s + 7.111s = 13.091s`, 13.2 s
-on the next boot); `16.396s + 7.813s = 24.210s` before it (v0.4-rc1 and earlier; "kernel" includes
-the initramfs). Where the time of a boot before the change went, from the kernel's timestamps:
+`deviceinfo_no_framebuffer=true` (13.1-14.1 s over about ten boots; the first boot of a freshly written `CAMERA=1`
+image: `5.979s + 7.111s = 13.091s`); `16.396s + 7.813s = 24.210s` before it (v0.3 and earlier). "kernel" includes the
+initramfs. Where the time of a boot before the change went, from the kernel's timestamps:
 
 | In order | Time |
 |---|---|
 | kernel, up to `/init` of the initramfs | 0.88 s |
 | initramfs, before its udev (eudev) starts; this ends exactly when `random: crng init done` is logged (most likely udevd reading `/dev/urandom` while there is no hardware RNG and no seed from lk2nd: inferred, not traced) | ~2.06 s |
-| **waiting for `/dev/fb0`**, from 3.35 s to 13.66 s (gone since v0.4-rc2) | 10.3 s |
+| **waiting for `/dev/fb0`**, from 3.35 s to 13.66 s (gone since v0.4) | 10.3 s |
 | `check_keys` (a `sleep 1`) | ~1.0 s |
 | sub-partitions mapped (`kpartx`) and found (`blkid`) | ~1.0 s |
 | resize check and `e2fsck` of the root | 0.33 s |
@@ -64,7 +64,7 @@ The remaining seconds need changes to the initramfs or to the firmware loader an
 
 ## Boot report
 
-Since v0.4-rc2 every image has `thinksmart-boot-report.service`, so each boot leaves its time in the journal and a
+Since v0.4 every image has `thinksmart-boot-report.service`, so each boot leaves its time in the journal and a
 slow boot leaves what is needed to understand it. It starts with userspace (`DefaultDependencies=no`, wanted by
 `sysinit.target`), is `Type=simple` so nothing waits for it, and runs `/usr/local/sbin/thinksmart-boot-report`
 (POSIX sh, coreutils and util-linux only). About once a second until systemd reports the boot finished
@@ -100,6 +100,10 @@ follows as separate lines. The settings are in `/etc/default/thinksmart-boot-rep
 it ignores every error and exits by itself. Its own cost is in `journalctl -u thinksmart-boot-report` (`Consumed …
 CPU time`).
 
+Measured on the device: a normal boot gives the one line, with a benchmark of 17/19/35 ms at the default
+`BENCH_LOOPS=2000`; the service used 0.46 s of CPU time (`CPUUsageNSec`) in a 13.4 s boot, and the boot time did not
+change. The `SLOW` branch, forced with a threshold of 0, logged the samples and real `clk_summary` lines.
+
 ## System
 
 Debian 13 trixie arm64, `minbase` + `--no-install-recommends`: systemd, udev, NetworkManager + wpasupplicant,
@@ -132,7 +136,7 @@ disk (50 MB, kept across reboots). About 470 MB used on root without the optiona
   ([above](#boot-report)),
   NetworkManager, ssh, timesyncd, nftables, avahi-daemon; login on the screen (`getty@tty1`).
 - **Splash** (optional, done by an application): the screen is free about 12 s after the kernel starts (17.5 s
-  before v0.4-rc2, [above](#boot-time)). The framebuffer is `/dev/fb0` (800×1280, BGRX); a unit with
+  in v0.3, [above](#boot-time)). The framebuffer is `/dev/fb0` (800×1280, BGRX); a unit with
   `DefaultDependencies=no` that loads `msm` and the panel module itself (without waiting for udev) and copies a
   pre-rendered raw image can show it that early.
 
@@ -158,7 +162,7 @@ Fixes in the image:
   `DM_UDEV_PRIMARY_SOURCE_FLAG=1`; the standard rules then do the rest;
 - `/boot` in fstab with `nofail,x-systemd.device-timeout=90`: if it does not appear, the system still reaches Wi-Fi
   and ssh (`/boot` is only needed to change kernel or `extlinux.conf`); with `nofail` nothing waits for it, and the
-  timeout is 90 s rather than 15 s (before v0.4-rc2) because in one slow boot the device appeared later than 15 s and
+  timeout is 90 s rather than 15 s (v0.3 and earlier) because in one slow boot the device appeared later than 15 s and
   `/boot` stayed unmounted ([known-issues.md](known-issues.md#boot));
 - `systemd-gpt-auto-generator` disabled: it follows the root up to `mmcblk0` (Android's GPT, dozens of partitions).
 

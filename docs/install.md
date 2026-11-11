@@ -133,7 +133,9 @@ plus the optional `vcnl4000.ko` and `venus-core.ko`); you never need the bootstr
 Optional, for applications that show web pages: the **web layer** (`WEB=1` in `config.env`) needs
 `libwpewebkit-2.0-1_*_arm64.deb` in `image/parts/`, built by `image/build-wpe.sh` on a fast arm64 machine with Docker
 (see the top of the script). For an AirPlay receiver (UxPlay, shipped by your application), `AIRPLAY=1` installs
-the GStreamer runtime it needs from Debian: nothing to build.
+the GStreamer runtime it needs from Debian: nothing to build. For the front camera (`CAMERA=1`), `s5kc505a.ko` and
+the camera DTB go in `image/parts/` too ([driver/s5kc505a](../driver/s5kc505a/README.md#building); CI builds both);
+libcamera comes from Debian.
 
 ## 6. Build the image
 
@@ -167,7 +169,7 @@ before flashing. Then:
 ~/edl-venv/bin/edl reset
 ```
 
-After ~30 s the device joins your Wi-Fi (the screen shows the login prompt). Find its address in your router
+Within half a minute the device joins your Wi-Fi (the screen shows the login prompt). Find its address in your router
 (hostname from `DEVICE_HOSTNAME`) and log in: `ssh root@<device-ip>`. Tip: give it a fixed address in the router
 (set `WIFI_MAC` in `config.env` if you want a stable MAC).
 
