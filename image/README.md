@@ -159,8 +159,9 @@ added after that commit (the flip controls, libcamera 0.7.1, the `dma_heap` rule
 on that device by hand with the steps of [Upgrading without reflashing](#upgrading-without-reflashing), and works
 there: upright frames, about 25 fps at 1280×960 and 14 fps at 2560×1600, a user without privileges in groups `video`
 and `render` streams 2560×1600, boot about 14 s with the boot report running.
-**An image built from the current code has passed `verify.sh` (test builds with fake data) but has not been written
-to a device yet.**
+Then an image of the final code (`WEB=1 AIRPLAY=1 CAMERA=1`, 456 packages, `verify.sh` 182 ok) was written to the
+same device and booted: 13.3 s, no failed units, the boot report line in the journal, upright libcamera frames from a
+user without privileges in groups `video` and `render` at 1280×960 and 2560×1600 with nothing installed by hand.
 
 Measured on test builds of v0.4 (same configuration otherwise): `CAMERA=1` adds 25 packages and 62 MB to the plain
 image (218 → 243 packages, root 472 → 534 MB, `.img.gz` 183 → 202 MB): 5 for `v4l-utils`, 20 for libcamera 0.7 (with libpisp and

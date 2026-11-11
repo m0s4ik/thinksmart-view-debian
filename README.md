@@ -72,8 +72,8 @@ halt` before unplugging). See [known issues](docs/known-issues.md).
 ## What's new in v0.4
 
 > [!IMPORTANT]
-> **Not released yet.** Tested on one device; an image built from the current code has passed `verify.sh` but has
-> not been written to a device yet ([what was tested how](image/README.md#tested)).
+> **Not released yet.** Tested on one device, as a written `CAMERA=1` image of the current code
+> ([what was tested how](image/README.md#tested)).
 
 - **Faster boot, 24 s → 14 s**, on every image: `deviceinfo_no_framebuffer=true` on the kernel command line stops
   the postmarketOS initramfs from waiting 10 s for a framebuffer that cannot appear there. Nothing else in `/boot`
