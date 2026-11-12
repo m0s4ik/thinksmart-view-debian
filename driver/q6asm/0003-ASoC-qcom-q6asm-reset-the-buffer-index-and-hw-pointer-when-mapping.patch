@@ -1,0 +1,49 @@
+From: Andrea Mattera <26578395+m0s4ik@users.noreply.github.com>
+Subject: [PATCH] ASoC: qcom: q6asm: reset the buffer index and hw pointer when mapping
+
+Not upstream: carried by thinksmart-view-debian (driver/q6asm). Found by
+reading the code, not yet confirmed on hardware.
+
+Each port of an audio client keeps two pieces of state about the ring
+it shares with the DSP: dsp_buf, the index of the next buffer handed to
+the DSP by q6asm_write_async() or q6asm_read(), and hw_ptr, the number
+of the last buffer the DSP returned, which q6asm-dai reports as the
+position. Neither is reset when the ring is mapped again.
+
+q6asm-dai unmaps and maps the ring on every prepare of a stream that
+already ran. dsp_buf is reset only by CMD_FLUSH, which the PCM path
+never sends, and hw_ptr only changes when a buffer comes back. So after
+a re-prepare:
+
+ - ALSA writes at ring offset 0 while the driver queues buf[k], where k
+   is the buffer the previous run stopped at: the DSP plays (or, on
+   capture, fills) the ring from the wrong place. If the new
+   hw_params has fewer periods than k, port->buf[port->dsp_buf] reads
+   past the end of the new buffer array.
+ - q6asm_dai_pointer() reports the previous run's position until the
+   first buffer returns, and then k+1 instead of 1.
+
+The expected effect is a burst of stale audio and/or an immediate
+spurious xrun after every restart that did not stop on a lap boundary;
+on capture, up to k stale periods are delivered after a restart.
+
+Reset both when the ring is mapped, under the client lock. q6apm got
+the same fixes in cab45ab95ce7 (dsp_buf in q6apm_map_memory_regions)
+and 0337b8129cf6 (hw_ptr).
+
+Fixes: 44432315444c ("ASoC: qcom: q6asm-dai: use q6asm_get_hw_pointer")
+---
+ sound/soc/qcom/qdsp6/q6asm.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+--- a/sound/soc/qcom/qdsp6/q6asm.c
++++ b/sound/soc/qcom/qdsp6/q6asm.c
+@@ -500,6 +500,8 @@
+ 	int rc;
+ 
+ 	spin_lock_irqsave(&ac->lock, flags);
++	ac->port[dir].dsp_buf = 0;
++	atomic_set(&ac->port[dir].hw_ptr, 0);
+ 	if (ac->port[dir].buf) {
+ 		dev_err(ac->dev, "Buffer already allocated\n");
+ 		spin_unlock_irqrestore(&ac->lock, flags);

@@ -17,6 +17,8 @@ driver/vcnl4000/vcnl4000.c
 driver/venus/*.c
 driver/venus/*.h
 driver/venus/*.orig
+driver/q6asm/*.c
+driver/q6asm/*.orig
 # kernel module build output
 driver/*/*.o
 driver/*/*.mod

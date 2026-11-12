@@ -2,7 +2,7 @@
 # SPDX-FileCopyrightText: 2026 Andrea Mattera
 # Checks on every push and pull request: shell scripts (shellcheck), no private data in the repository, and the
 # TAS5782M driver builds for the postmarketOS 7.1.3 kernel exactly as in driver/tas5782m/README.md (with the optional
-# modules and the camera DTB of driver/s5kc505a). The image itself cannot be built here: it needs kernel parts taken
+# modules, the q6asm audio stream modules of driver/q6asm and the camera DTB of driver/s5kc505a). The image itself cannot be built here: it needs kernel parts taken
 # from a device.
 name: CI
 
@@ -38,7 +38,7 @@ jobs:
         run: .github/scripts/check-private.sh
 
   driver:
-    name: Kernel modules for 7.1.3-msm8953 (TAS5782M, VCNL4000, venus, poweroff, S5KC505A) and camera DTB
+    name: Kernel modules for 7.1.3-msm8953 (TAS5782M, VCNL4000, venus, q6asm, poweroff, S5KC505A) and camera DTB
     runs-on: ubuntu-24.04
     container: debian:trixie
     env:
@@ -104,6 +104,28 @@ jobs:
         with:
           name: venus-core-${{ env.KVER }}
           path: driver/venus/venus-core.ko
+          if-no-files-found: error
+      - name: Build the audio stream modules (q6asm, q6asm-dai with driver/q6asm/*.patch)
+        run: |
+          q=/tmp/kernel/sound/soc/qcom/qdsp6
+          cp $q/q6asm.c $q/q6asm-dai.c driver/q6asm/
+          (cd driver/q6asm && sha256sum --strict -c source.sha256)
+          for p in driver/q6asm/000*.patch; do patch -d driver/q6asm -p5 --fuzz=0 < "$p"; done
+          $KMAKE -C /tmp/kernel -j"$(nproc)" KBUILD_MODPOST_WARN=1 M="$PWD/driver/q6asm" modules
+          for m in q6asm q6asm-dai; do
+            /sbin/modinfo -F vermagic driver/q6asm/$m.ko | grep -q "^$KVER SMP preempt mod_unload aarch64"
+          done
+          /sbin/modinfo -F alias driver/q6asm/q6asm-dai.ko | grep -q 'qcom,q6asm-dais'
+          /sbin/modinfo -F alias driver/q6asm/q6asm.ko | grep -q 'qcom,q6asm$'
+          grep -q 'prtd->queue_ptr = 0;' driver/q6asm/q6asm-dai.c
+          grep -q '% runtime->periods' driver/q6asm/q6asm-dai.c
+          grep -q 'atomic_set(&ac->port\[dir\].hw_ptr, 0);' driver/q6asm/q6asm.c
+      - uses: actions/upload-artifact@v7
+        with:
+          name: q6asm-${{ env.KVER }}
+          path: |
+            driver/q6asm/q6asm.ko
+            driver/q6asm/q6asm-dai.ko
           if-no-files-found: error
       - name: Build the poweroff module (experimental, driver/thinksmart-poweroff)
         run: |
