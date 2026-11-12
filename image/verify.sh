@@ -5,9 +5,10 @@
 #   bash image/verify.sh <image> [sectors]        (run by build.sh before compressing)
 # Opens the image read-only through loop devices and checks: size, MBR, p1 features (lk2nd), UUIDs in extlinux.conf
 # and fstab, deviceinfo_no_framebuffer=true on the kernel command line (no 10 s wait for fb0 in the initramfs), the
-# TAS5782M module in modules.dep, firmware, UCM, enabled services, users and keys, Wi-Fi profile, Python and the ALSA
-# configuration (through qemu); the boot report; the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM;
-# EGL and GBM loaded through qemu); the web layer and the AirPlay runtime, on or off. Front camera
+# TAS5782M module in modules.dep, the q6asm modules (the kernel package's, or both rebuilt from driver/q6asm),
+# firmware, UCM, enabled services, users and keys, Wi-Fi profile, Python and the ALSA configuration (through qemu);
+# the boot report; the reduced Mesa (package, libglvnd vendor, no Debian Mesa or LLVM; EGL and GBM loaded through
+# qemu); the web layer and the AirPlay runtime, on or off. Front camera
 # (CAMERA=1, found from extlinux.conf, the module or the camera DTB): `fdt` instead of `fdtdir`, `cma=` on the command
 # line, the DTBs, the module, libcamera 0.7 from trixie-backports with its software ISP and libcamerasrc (loaded through
 # qemu, libcamera linked to libglvnd's EGL and GLES for the GPU debayer), the trixie-backports source, the dma_heap udev
@@ -200,6 +201,30 @@ for f in conf.d/cd-18781y/cd-18781y.conf Lenovo/cd-18781y/HiFi.conf lib/card-ini
     check "UCM $f" test -s "$V/usr/share/alsa/ucm2/$f"
 done
 check "softvol speaker in /etc/asound.conf" grep -q 'Master Playback Volume' "$V/etc/asound.conf"
+# audio stream modules: the kernel package's, or both rebuilt from driver/q6asm (playback restart fixes)
+Q=$MD/kernel/sound/soc/qcom/qdsp6
+qdep=$(grep '^kernel/sound/soc/qcom/qdsp6/q6asm-dai.ko:' "$MD/modules.dep")
+case "$qdep" in
+    *qdsp6/q6asm.ko*qdsp6/q6routing.ko*|*qdsp6/q6routing.ko*qdsp6/q6asm.ko*)
+        ok "modules.dep: q6asm-dai.ko with q6asm.ko and q6routing.ko" ;;
+    *)  no "modules.dep: q6asm-dai.ko missing or without q6asm.ko and q6routing.ko" ;;
+esac
+rebuilt=0
+for f in q6asm.ko q6asm-dai.ko; do
+    grep -aq 'intree=Y' "$Q/$f" 2>/dev/null || rebuilt=$((rebuilt + 1))
+done
+if [ "$rebuilt" = 0 ]; then
+    echo "  skip  kernel package's q6asm: no playback restart fixes (optional, driver/q6asm)"
+elif [ "$rebuilt" = 1 ]; then
+    no "q6asm and q6asm-dai: one rebuilt, one from the kernel package"
+else
+    for f in q6asm.ko q6asm-dai.ko; do
+        vm=$(grep -ao 'vermagic=[^[:cntrl:]]*' "$Q/$f" 2>/dev/null)
+        [ "$vm" = "vermagic=$KVER SMP preempt mod_unload aarch64" ] && ok "$f rebuilt (driver/q6asm): $vm" \
+            || no "$f: vermagic '${vm#vermagic=}', expected $KVER"
+    done
+    grep -q 'qcom,q6asm-dais' "$MD/modules.alias" && ok "modules.alias: qcom,q6asm-dais" || no "modules.alias without qcom,q6asm-dais"
+fi
 
 echo "-- front camera"
 CAMERA_DTB=apq8053-lenovo-cd-18781y-camera.dtb

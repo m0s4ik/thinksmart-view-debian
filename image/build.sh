@@ -16,6 +16,7 @@
 #                      mesa-freedreno_<ver>_arm64.deb (image/build-mesa.sh)
 #                      vcnl4000.ko (optional, light sensor: driver/vcnl4000)
 #                      venus-core.ko (optional, video decoder: driver/venus)
+#                      q6asm.ko + q6asm-dai.ko (optional, playback restart fixes: driver/q6asm)
 #                      libwpewebkit-2.0-1_<ver>_arm64.deb (only with WEB=1: image/build-wpe.sh)
 #                      s5kc505a.ko + apq8053-lenovo-cd-18781y-camera.dtb (only with CAMERA=1: driver/s5kc505a)
 #          AIRPLAY=1 needs nothing in PARTS_DIR (Debian packages only; venus-core.ko for screen mirroring)
@@ -184,6 +185,20 @@ done
 if ! grep -aq 'parm=volume_mode:' "$P/snd-soc-tas5782m.ko" && [ "${ALLOW_OLD_TAS5782M:-}" != 1 ]; then
     echo "$P/snd-soc-tas5782m.ko is the old driver (no volume_mode parameter): rebuild it from driver/tas5782m" >&2
     echo "(see driver/tas5782m/README.md), or set ALLOW_OLD_TAS5782M=1 to use it anyway" >&2
+    exit 1
+fi
+# audio stream modules (optional, driver/q6asm): both rebuilt ones or neither, checked before the long build
+Q6ASM=0
+if [ -s "$P/q6asm.ko" ] && [ -s "$P/q6asm-dai.ko" ]; then
+    for f in q6asm.ko q6asm-dai.ko; do
+        grep -aq "vermagic=$KVER SMP preempt mod_unload aarch64" "$P/$f" || \
+            { echo "$P/$f is not built for $KVER (vermagic)" >&2; exit 1; }
+        ! grep -aq 'intree=Y' "$P/$f" || \
+            { echo "$P/$f is the kernel package's module, not the rebuilt one (driver/q6asm)" >&2; exit 1; }
+    done
+    Q6ASM=1
+elif [ -s "$P/q6asm.ko" ] || [ -s "$P/q6asm-dai.ko" ]; then
+    echo "only one of $P/q6asm.ko and q6asm-dai.ko: the two are built and installed together (driver/q6asm)" >&2
     exit 1
 fi
 [ -n "${WIFI_SSID:-}" ] && [ -n "${WIFI_PSK:-}" ] || { echo "WIFI_SSID and WIFI_PSK are required" >&2; exit 1; }
@@ -440,6 +455,14 @@ else
     echo "NOTE: no $P/venus-core.ko: image without the hardware video decoder (see driver/venus/README.md)"
     [ "$AIRPLAY" = 0 ] || echo "NOTE: AIRPLAY=1 without venus-core.ko: screen mirroring has no hardware H.264 decoder"
 fi
+# audio stream modules (optional, driver/q6asm, checked above): playback restarts after a drop or an underrun
+if [ "$Q6ASM" = 1 ]; then
+    for f in q6asm.ko q6asm-dai.ko; do
+        install -m 0644 "$P/$f" "$R/usr/lib/modules/$KVER/kernel/sound/soc/qcom/qdsp6/$f"
+    done
+else
+    echo "NOTE: no $P/q6asm.ko and q6asm-dai.ko: image with the kernel package's q6asm (see driver/q6asm/README.md)"
+fi
 # front camera (CAMERA=1, driver/s5kc505a): udev loads it, i2c-qcom-cci and qcom-camss from the camera DTB
 if [ "$CAMERA" = 1 ]; then
     install -m 0644 "$P/s5kc505a.ko" "$R/usr/lib/modules/$KVER/extra/s5kc505a.ko"
@@ -498,6 +521,7 @@ AirPlay runtime: $([ "$AIRPLAY" = 1 ] && in_chroot dpkg-query -W -f='GStreamer $
 ${EXTRA:-customization: none}
 UUID: boot $BOOT_UUID  root $ROOT_UUID
 EOF
+[ "$Q6ASM" = 0 ] || echo "audio: q6asm and q6asm-dai rebuilt (driver/q6asm)" >> "$R/etc/thinksmart-version"
 [ "$CAMERA" = 0 ] || echo "camera: s5kc505a, fdt /$CAMERA_DTB and $CAMERA_CMA (extlinux.conf.nocamera: without them), libcamera $(in_chroot dpkg-query -W -f='${Version}' libcamera0.7) (trixie-backports), /dev/dma_heap for group video" >> "$R/etc/thinksmart-version"
 rm -f "$R/usr/sbin/policy-rc.d" "$R/etc/resolv.conf"
 rm -rf "$R"/var/lib/apt/lists/* "$R"/var/cache/apt/*.bin "$R"/var/cache/apt/archives/*.deb
