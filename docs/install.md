@@ -109,8 +109,10 @@ machine:
 
 Build `snd-soc-tas5782m.ko` as described in [driver/tas5782m/README.md](../driver/tas5782m/README.md) and copy it to
 `image/parts/` (optional: `vcnl4000.ko` for the light sensor, [driver/vcnl4000/README.md](../driver/vcnl4000/README.md),
-and `venus-core.ko` for the hardware video decoder, [driver/venus/README.md](../driver/venus/README.md)). The CI of this
-repository builds all three for the 7.1.3 kernel: you can also take them from the artifacts of a green run.
+`venus-core.ko` for the hardware video decoder, [driver/venus/README.md](../driver/venus/README.md), and, v0.5-rc and
+not yet tested on a device, `q6asm.ko` + `q6asm-dai.ko` for playback that restarts after a stop or an underrun,
+[driver/q6asm/README.md](../driver/q6asm/README.md)). The CI of this repository builds all of them for the 7.1.3 kernel:
+you can also take them from the artifacts of a green run.
 
 ## 5. Mesa for the GPU
 
@@ -128,7 +130,7 @@ sudo apt install --no-install-recommends ca-certificates curl xz-utils binutils 
 
 It writes `image/parts/mesa-freedreno_<version>_arm64.deb`. You now have six files in `image/parts/`
 (`boot.tar`, `modules-7.1.3-msm8953.tar`, `firmware.tar`, `ucm.tar`, `snd-soc-tas5782m.ko` and the Mesa package,
-plus the optional `vcnl4000.ko` and `venus-core.ko`); you never need the bootstrap again.
+plus the optional `vcnl4000.ko`, `venus-core.ko`, `q6asm.ko` and `q6asm-dai.ko`); you never need the bootstrap again.
 
 Optional, for applications that show web pages: the **web layer** (`WEB=1` in `config.env`) needs
 `libwpewebkit-2.0-1_*_arm64.deb` in `image/parts/`, built by `image/build-wpe.sh` on a fast arm64 machine with Docker

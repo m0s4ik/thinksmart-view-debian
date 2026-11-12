@@ -40,6 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
+| `driver/q6asm/` | optional audio stream modules (v0.5-rc, not yet tested on a device): `q6asm` + `q6asm-dai` with three patches so playback restarts after a stop or an underrun, built out of tree; `install-module.sh`, `restart-test.py` |
 | `driver/s5kc505a/` | optional front camera: jethac's sensor driver with our flip controls (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env`, or by hand |
 
 ## Commands and the checks that must pass
@@ -50,6 +51,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 # build snd-soc-tas5782m.ko: driver/tas5782m/README.md, then copy it to image/parts/
 # optional: vcnl4000.ko (light sensor) from driver/vcnl4000/README.md, also to image/parts/
 # optional: venus-core.ko (video decoder) from driver/venus/README.md, also to image/parts/
+# optional, v0.5-rc: q6asm.ko + q6asm-dai.ko (both, driver/q6asm/README.md), also to image/parts/
 # optional, CAMERA=1: s5kc505a.ko + apq8053-lenovo-cd-18781y-camera.dtb (driver/s5kc505a/README.md or CI artifacts)
 ./image/build-mesa.sh                            # reduced Mesa for the GPU -> image/parts/mesa-freedreno_*_arm64.deb
 /sbin/modinfo image/parts/snd-soc-tas5782m.ko    # vermagic "7.1.3-msm8953 SMP preempt mod_unload aarch64"
@@ -95,6 +97,8 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   (they keep the last program's value). libcamera's default 2560x1600 needs `cma=128M` on the kernel command line
   (`CAMERA=1` adds it; a hand install must add it too): with the default 32 MB CMA ask for 1280x960. Without root:
   groups `video` (with the `dma_heap` udev rule) and `render`.
+- q6asm ([driver/q6asm](driver/q6asm/README.md)): never ship 0001 without 0002; the two modules go together; a
+  device needs a reboot to load them: ask first.
 - Do not offer Volume Up at power-on (the `recovery` partition) as a way back: tried once with a rescue image there,
   it did not boot. EDL is the tested way back; lk2nd's `fastboot boot` is not tried yet.
 - `verify.sh` needs `systemctl`, `udevadm`, `dmsetup` and `nft` on the build machine (`build.sh` installs them); run on

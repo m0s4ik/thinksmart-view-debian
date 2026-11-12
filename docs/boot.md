@@ -127,6 +127,9 @@ disk (50 MB, kept across reboots). About 470 MB used on root without the optiona
 - **Video decoder**: with `venus-core.ko` in the parts, the kernel package's `venus-core` is replaced by the rebuilt
   one ([driver/venus](../driver/venus/README.md)); udev loads it and `/dev/video*` appear (`qcom-venus-decoder`,
   `qcom-venus-encoder`).
+- **Audio stream modules** (v0.5-rc, not yet tested on a device): with `q6asm.ko` and `q6asm-dai.ko` in the parts, the
+  kernel package's ones are replaced by the rebuilt pair ([driver/q6asm](../driver/q6asm/README.md)), so that playback
+  restarts after a stop or an underrun.
 - **Audio**: `thinksmart-audio.service` waits for the `cd18781y` card (udev loads `snd-soc-tas5782m`), applies the
   UCM boot sequence and `HiFi`/`Speaker`/`Microphone`, sets the volume on the amplifier (`Speaker Amp Master`)
   from `/var/lib/thinksmart/volume` or `VOLUME` of `/etc/default/thinksmart-audio`, and leaves the software volume

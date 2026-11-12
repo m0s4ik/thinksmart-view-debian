@@ -16,6 +16,7 @@ None of these binaries are in this repository. `image/build.sh` expects them in 
 | `snd-soc-tas5782m.ko` | the speaker driver built for this kernel ([driver/tas5782m/README.md](../driver/tas5782m/README.md)) |
 | `vcnl4000.ko` | optional: the light sensor driver built for this kernel ([driver/vcnl4000/README.md](../driver/vcnl4000/README.md)) |
 | `venus-core.ko` | optional: the video decoder core rebuilt with the mainline HFI parser ([driver/venus/README.md](../driver/venus/README.md)); replaces the kernel package's one |
+| `q6asm.ko`, `q6asm-dai.ko` | optional, v0.5-rc, not yet tested on a device: the audio stream modules rebuilt with three patches so that playback restarts after a stop or an underrun ([driver/q6asm/README.md](../driver/q6asm/README.md)); both together, they replace the kernel package's ones |
 | `s5kc505a.ko`, `apq8053-lenovo-cd-18781y-camera.dtb` | optional, only for the front camera (`CAMERA=1`): the sensor driver and the patched DTB ([driver/s5kc505a/README.md](../driver/s5kc505a/README.md)); CI builds both |
 | `mesa-freedreno_<version>_arm64.deb` | reduced Mesa for the GPU (freedreno only, EGL, GBM, OpenGL ES, Wayland platform, no LLVM, ~22 MB installed), built by `image/build-mesa.sh` (see [Mesa](#mesa) below) |
 | `libwpewebkit-2.0-1_*~bpo13+1_arm64.deb` (+ `-dev`, `wpewebkit-webdriver`) | optional, only for the web layer (`WEB=1`): WPE WebKit 2.54 backported from Debian forky to Debian 13 (Debian 13's 2.48 cannot use the GPU with Mesa 26), built by `image/build-wpe.sh` on a fast arm64 machine with Docker. The image installs only `libwpewebkit-2.0-1` |
@@ -44,8 +45,8 @@ next to the original (and `s5kc505a.ko`) only if they match.
    first), so keep a copy of the old file to go back.
 4. Reboot; screen, touch and Wi-Fi work on 7.1.3 with the Himax panel.
 5. From the build machine: `./image/fetch-parts.sh user@device` copies the four tar files to `image/parts/`.
-6. Build `snd-soc-tas5782m.ko` (and, optionally, `vcnl4000.ko` for the light sensor and `venus-core.ko` for the
-   video decoder) and copy them to `image/parts/`.
+6. Build `snd-soc-tas5782m.ko` (and, optionally, `vcnl4000.ko` for the light sensor, `venus-core.ko` for the
+   video decoder and `q6asm.ko` + `q6asm-dai.ko` for the playback restart fixes) and copy them to `image/parts/`.
 7. Build the reduced Mesa: `./image/build-mesa.sh` (cross-compiles in ~10 minutes; dependencies at the top of the
    script). It writes `image/parts/mesa-freedreno_<version>_arm64.deb`.
 

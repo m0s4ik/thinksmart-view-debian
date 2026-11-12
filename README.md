@@ -143,7 +143,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 | [Hardware](docs/hardware.md) | panel, audio, Wi-Fi, sensors, keys, camera |
 | [Known issues](docs/known-issues.md) | what does not work (yet) |
 | [`image/`](image/README.md) | the build script, its options (web layer, AirPlay runtime, front camera), customization hook and upgrades in place |
-| [`driver/`](driver/) | the speaker driver ([tas5782m](driver/tas5782m/README.md)), the light sensor ([vcnl4000](driver/vcnl4000/README.md)), video decoder ([venus](driver/venus/README.md)) and front camera ([s5kc505a](driver/s5kc505a/README.md)) modules, the experimental [thinksmart-poweroff](driver/thinksmart-poweroff/README.md) |
+| [`driver/`](driver/) | the speaker driver ([tas5782m](driver/tas5782m/README.md)), the light sensor ([vcnl4000](driver/vcnl4000/README.md)), video decoder ([venus](driver/venus/README.md)), audio stream ([q6asm](driver/q6asm/README.md), v0.5-rc) and front camera ([s5kc505a](driver/s5kc505a/README.md)) modules, the experimental [thinksmart-poweroff](driver/thinksmart-poweroff/README.md) |
 
 ## Roadmap
 
@@ -161,6 +161,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
 - [x] Front camera (S5KC505A), optional (`CAMERA=1`): raw frames, upright frames through libcamera 0.7 on the GPU,
   full size (v0.4)
+- [ ] Playback that restarts after a stop or an underrun: rebuilt q6asm modules (v0.5-rc, built, to be tested on a device)
 - [ ] Camera sensor tuning (colours are acceptable untuned with libcamera 0.7)
 - [ ] FT8201 panel variant
 
@@ -192,7 +193,8 @@ Copyright (C) 2026 Andrea Mattera.
 - **GPL-2.0-only** for the kernel code in [`driver/`](driver/): the TAS5782M driver, a modified copy of rickx's
   driver (changes listed in [driver/tas5782m/README.md](driver/tas5782m/README.md#changes-2026-11-03)), and its
   `install-module.sh`; `thinksmart-poweroff`; the build files and `hfi_parser.patch` of the venus and vcnl4000
-  modules (they build the kernel's own sources). Like any Linux kernel module they stay under the kernel's license
+  modules, the build files, patches and `install-module.sh` of the q6asm modules (they build the kernel's own
+  sources). Like any Linux kernel module they stay under the kernel's license
   (GPL-2.0-only is not compatible with GPL-3.0). See [driver/tas5782m/LICENSE](driver/tas5782m/LICENSE).
 - [`kernel/config-7.1.3-msm8953`](kernel/config-7.1.3-msm8953) is the kernel configuration of the postmarketOS
   package `linux-postmarketos-qcom-msm8953` (GPL-2.0).

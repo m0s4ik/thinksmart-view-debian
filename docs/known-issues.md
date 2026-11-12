@@ -5,16 +5,23 @@
 - **dmix does not work** on this card: in mmap mode `hw_ptr` stays at 0 (q6asm) and `aplay` on dmix never finishes
   draining. So the speaker cannot be shared: one program plays at a time. An application that needs several sounds at
   once (music, a voice, alerts) mixes them itself and owns the pcm; an AirPlay receiver can hand its decoded audio to
-  that application instead of opening the card (UxPlay's audio sink is a GStreamer pipeline). PipeWire: not tried.
+  that application instead of opening the card (UxPlay's audio sink is a GStreamer pipeline). PipeWire: not tried. Not changed by
+  [driver/q6asm](../driver/q6asm/README.md) (to be retested).
 - **24-bit playback is silent**: the card offers S16_LE and S24_LE, but with S24_LE the speaker plays nothing (no error).
   Anything decoded to 32 bit (GStreamer's `avdec_*`, ffmpeg) was converted to S24_LE by the plug and came out silent.
   Since v0.3-rc3 `/etc/asound.conf` converts everything going through `speaker` (and `default`) to S16_LE
   (`speaker_hw`); programs that open `hw:0,0` directly must use S16_LE. Where the 24-bit path breaks (q6asm, the DSP or
-  the amplifier's 32-bit I2S word) is not known yet.
+  the amplifier's 32-bit I2S word) is not known yet; driver/q6asm does not change formats.
 - **Amplifier power-up**: after a stream the amplifier is muted and goes to standby `standby_ms` later (default 3 s,
   see [driver/tas5782m/README.md](../driver/tas5782m/README.md)). The first sound after standby still needs ~0.5 s for
   the DSP firmware to load, which swallows short sounds: start them with ~600 ms of silence, raise `standby_ms`, or keep
   the pcm open. Sounds within `standby_ms` of the previous one start at once.
+- **Playback does not restart after a stop or an underrun** (stock q6asm modules): after `snd_pcm_drop()` or an
+  underrun followed by `snd_pcm_prepare()`, playback does not restart (nothing reaches the DSP) or the driver sends
+  bogus buffers, depending on the period size; an underrun itself is never detected, and drain ends only on its
+  timeout. A fix is in [driver/q6asm](../driver/q6asm/README.md): the two modules rebuilt with three patches,
+  optional, v0.5-rc, **not yet tested on a device**. The workaround in use so far: keep the pcm open and fed (silence
+  when there is nothing to play), or close and reopen it instead of dropping and preparing.
 
 ## Wi-Fi
 

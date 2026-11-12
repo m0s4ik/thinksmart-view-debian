@@ -19,7 +19,8 @@ built into the image with a [customization script](#customization) or installed 
   `snd-soc-tas5782m.ko` ([driver/tas5782m](../driver/tas5782m/README.md)) and
   `mesa-freedreno_<version>_arm64.deb` (with `build-mesa.sh`, dependencies at the top of the script).
   Optional: `vcnl4000.ko` ([driver/vcnl4000](../driver/vcnl4000/README.md)), `venus-core.ko`
-  ([driver/venus](../driver/venus/README.md)); for the web layer, `libwpewebkit-2.0-1_<version>_arm64.deb` (with
+  ([driver/venus](../driver/venus/README.md)), `q6asm.ko` + `q6asm-dai.ko` (both or neither; v0.5-rc, not yet tested
+  on a device: [driver/q6asm](../driver/q6asm/README.md)); for the web layer, `libwpewebkit-2.0-1_<version>_arm64.deb` (with
   `build-wpe.sh`); for the front camera, `s5kc505a.ko` and `apq8053-lenovo-cd-18781y-camera.dtb`
   ([driver/s5kc505a](../driver/s5kc505a/README.md), both built by CI).
 
@@ -54,7 +55,7 @@ host keys, so your ssh client does not complain after a reflash) as long as you 
 Debian `minbase` with systemd, NetworkManager, OpenSSH, nftables, ALSA (with the ThinkSmart UCM profile), Python 3
 with venv, DejaVu fonts, a reduced Mesa for the GPU (package `mesa-freedreno`, Mesa 26.3.0 behind Debian's
 libglvnd, no LLVM: [docs/kernel.md](../docs/kernel.md#mesa)); the kernel, modules (including `snd-soc-tas5782m` and,
-when they are in the parts, `vcnl4000` and the rebuilt `venus-core`), firmware and `msm-firmware-loader`. Details in
+when they are in the parts, `vcnl4000`, the rebuilt `venus-core` and the rebuilt `q6asm` and `q6asm-dai`), firmware and `msm-firmware-loader`. Details in
 [docs/boot.md](../docs/boot.md).
 
 - **Audio**: `thinksmart-audio.service` sets up the card at boot. `default` plays on the speaker (volume on the
@@ -208,7 +209,8 @@ with `nofail` and a 90 s device timeout; `dmsetup` and the device-mapper udev ru
 no unit requires `local-fs.target` or `/boot`; a **test device-mapper on p1** run through `udevadm test --action=add`
 in a mount namespace with the image's rules and an empty `/run/udev` (it must get `/dev/disk/by-uuid/<p1>` and not
 `SYSTEMD_READY=0`); the image's own `systemd-fstab-generator` (through qemu); kernel, initramfs, DTBs; `modules.dep`
-(TAS5782M, ath10k, accelerometer); firmware; UCM; enabled and masked services, the boot report (`sh -n`,
+(TAS5782M, ath10k, accelerometer, `q6asm-dai` with its dependencies); the q6asm modules: the kernel package's (a
+`skip` line) or both rebuilt, with their vermagic and alias; firmware; UCM; enabled and masked services, the boot report (`sh -n`,
 `Type=simple`); keys, Wi-Fi profile (without printing the PSK), `nft -c`; inside the image: Python with venv and the ALSA pcms `speaker` and `default`. GPU: the
 `mesa-freedreno` package, libglvnd's dispatchers and Mesa's vendor file, what the package provides, libgbm's backend
 path, no Debian Mesa or LLVM, `libEGL.so.1` loading Mesa through libglvnd (gbm and wayland platforms) and `ldd` of the
@@ -234,6 +236,14 @@ and the AirPlay runtime are off too).
 - `apt upgrade` is fine: Debian packages do not touch `/boot` or the 7.1.3 modules.
 
 ## Upgrading without reflashing
+
+### From v0.4 to v0.5-rc
+
+v0.5-rc, not yet tested on a device. The playback restart fixes are two kernel modules: build them
+([driver/q6asm](../driver/q6asm/README.md#building), or take the CI artifact `q6asm-7.1.3-msm8953`), copy them with
+`driver/q6asm/install-module.sh` to the device, run `./install-module.sh <dir>` as root, then reboot. The script keeps
+the original pair; `./install-module.sh restore` and a reboot go back. Nothing in the boot path uses these modules: a
+wrong one costs the sound card only, and ssh stays up.
 
 ### From v0.3 to v0.4
 
