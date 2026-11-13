@@ -2,11 +2,10 @@
 
 ## Audio
 
-- **dmix does not work** on this card: in mmap mode `hw_ptr` stays at 0 (q6asm) and `aplay` on dmix never finishes
-  draining. So the speaker cannot be shared: one program plays at a time. An application that needs several sounds at
-  once (music, a voice, alerts) mixes them itself and owns the pcm; an AirPlay receiver can hand its decoded audio to
-  that application instead of opening the card (UxPlay's audio sink is a GStreamer pipeline). PipeWire: not tried. Not changed by
-  [driver/q6asm](../driver/q6asm/README.md) (retested 2026-11-13: `aplay` on dmix still never ends).
+- **dmix** works only with the rebuilt q6asm modules ([driver/q6asm](../driver/q6asm/README.md), v0.5-rc): on the
+  stock ones `hw_ptr` stays at 0 and `aplay` on dmix never finishes draining, so one program plays at a time.
+  `/etc/asound.conf` still opens the card directly (`speaker`, `default`): an application that needs several sounds
+  at once mixes them itself and owns the pcm, or uses a `dmix` pcm of its own. PipeWire: not tried.
 - **24-bit playback is silent**: the card offers S16_LE and S24_LE, but with S24_LE the speaker plays nothing (no error).
   Anything decoded to 32 bit (GStreamer's `avdec_*`, ffmpeg) was converted to S24_LE by the plug and came out silent.
   Since v0.3-rc3 `/etc/asound.conf` converts everything going through `speaker` (and `default`) to S16_LE
@@ -19,7 +18,7 @@
 - **Playback does not restart after a stop or an underrun** (stock q6asm modules): after `snd_pcm_drop()` or an
   underrun followed by `snd_pcm_prepare()`, playback does not restart (nothing reaches the DSP) or the driver sends
   bogus buffers, depending on the period size; an underrun itself is never detected, and drain ends only on its
-  timeout. A fix is in [driver/q6asm](../driver/q6asm/README.md): the two modules rebuilt with three patches,
+  timeout. A fix is in [driver/q6asm](../driver/q6asm/README.md): the two modules rebuilt with four patches,
   optional, v0.5-rc, tested on a device. Without them: keep the pcm open and fed (silence when there is nothing to
   play), or close and reopen it instead of dropping and preparing.
 

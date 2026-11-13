@@ -161,7 +161,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
 - [x] Front camera (S5KC505A), optional (`CAMERA=1`): raw frames, upright frames through libcamera 0.7 on the GPU,
   full size (v0.4)
-- [x] Playback that restarts after a stop or an underrun: rebuilt q6asm modules, optional (v0.5-rc)
+- [x] Playback that restarts after a stop or an underrun, and dmix: rebuilt q6asm modules, optional (v0.5-rc)
 - [ ] Camera sensor tuning (colours are acceptable untuned with libcamera 0.7)
 - [ ] FT8201 panel variant
 

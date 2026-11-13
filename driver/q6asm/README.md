@@ -4,28 +4,29 @@
 uses the kernel package's ones, as v0.4 does.
 
 `q6asm` (the client of the DSP's audio stream manager) and `q6asm-dai` (the ALSA PCM on top of it) of the 7.1.3
-kernel, rebuilt out of tree with three patches. The rest of the audio stack (`q6core`, `q6afe`, `q6adm`, `q6routing`,
+kernel, rebuilt out of tree with four patches. The rest of the audio stack (`q6core`, `q6afe`, `q6adm`, `q6routing`,
 the machine driver, the TAS5782M driver) is the kernel package's, unchanged.
 
 ## Why
 
 On the stock modules a playback stream that is stopped and prepared again (`snd_pcm_drop()` then
 `snd_pcm_prepare()`, or the recovery after an underrun) does not restart properly, and an underrun is never detected:
-the stream stays `RUNNING` and `snd_pcm_drain()` only ends on its timeout.
+the stream stays `RUNNING` and `snd_pcm_drain()` only ends on its timeout. And dmix, which plays the ring like a DMA
+buffer without moving `appl_ptr`, gets nothing to the DSP at all.
 
 | Patch | Origin | What breaks without it |
 |---|---|---|
 | [`0001-…-wrap-the-position-of-a-full-ring-to-0.patch`](0001-ASoC-qcom-q6asm-dai-wrap-the-position-of-a-full-ring-to-0.patch) | upstream [`222d04cf55bc`](https://git.kernel.org/torvalds/c/222d04cf55bc), the unmodified commit (`Cc: stable`, not yet in 7.1.y) | the position is reported one frame short: an underrun is never detected, drain waits for its timeout; on capture the last frame of each period is held back |
 | [`0002-…-reset-the-queue-pointer-in-prepare.patch`](0002-ASoC-qcom-q6asm-dai-reset-the-queue-pointer-in-prepare.patch) | ours, not upstream | after a prepare ALSA restarts `appl_ptr` from 0 but `queue_ptr` keeps the old value: with 480, 2400 or 4800 frames per period nothing reaches the DSP any more (silent stall); with 960, 1440 or 1920 the driver sends hundreds of millions of bogus write commands until the transport refuses one |
 | [`0003-…-reset-the-buffer-index-and-hw-pointer-when-mapping.patch`](0003-ASoC-qcom-q6asm-reset-the-buffer-index-and-hw-pointer-when-mapping.patch) | ours, not upstream | `dsp_buf` and `hw_ptr` survive a re-prepare: the DSP is handed the ring from where the last run stopped (stale audio, and an out-of-bounds read if the new stream has fewer periods), the position is the previous run's until the first buffer returns (a spurious xrun); on capture up to that many stale periods |
+| [`0004-…-play-a-free-running-ring-like-a-DMA-buffer.patch`](0004-ASoC-qcom-q6asm-dai-play-a-free-running-ring-like-a-DMA-buffer.patch) | ours, not upstream | buffers are handed to the DSP only when `appl_ptr` moves; a stream with `stop_threshold` at the boundary (dmix) never moves it, so nothing is played, the position stays at 0 and dmix never ends. With 0004 such a stream is fed like a DMA ring: the whole ring at start, then one period per write done. Streams with the default `stop_threshold` are unchanged |
 
 - **0001 must not be used without 0002.** On the stock modules an underrun goes unnoticed and the stream resumes by
   itself when data comes back. With 0001 the underrun is detected, the application prepares again, and without 0002
   that prepare stalls the stream or floods the DSP: xrun recovery would be worse than before.
-- **0002 and 0003 come from reading the code**: the mechanism is described in each patch, but neither is confirmed on
-  hardware yet. 0002 is the q6asm counterpart of upstream `cab45ab95ce7` (q6apm-dai), 0003 of `cab45ab95ce7` and
+- **0002, 0003 and 0004 are ours**, found by reading the code and confirmed on the device (results below). 0002 is the q6asm counterpart of upstream `cab45ab95ce7` (q6apm-dai), 0003 of `cab45ab95ce7` and
   `0337b8129cf6` (q6apm).
-- The modules are built and installed **together**: 0003 changes `q6asm`, 0001 and 0002 change `q6asm-dai`.
+- The modules are built and installed **together**: 0003 changes `q6asm`, 0001, 0002 and 0004 change `q6asm-dai`.
 
 Already in 7.1.3, so not to be backported again: `cee3e63e7106` with `048c540ee76d` (STOP and EOS do not change the
 stream state) and `4b4db09f283d` (a failed prepare keeps the audio client). Between 7.1.3 and Linus' master the only
@@ -33,8 +34,6 @@ other changes to these two files are a comment typo and `devm_kzalloc_obj` conve
 
 ## What it does not fix
 
-- **dmix** ([docs/known-issues.md](../../docs/known-issues.md#audio)): the driver queues data only when `appl_ptr`
-  moves, and dmix never moves it. Retested: unchanged (`aplay` on dmix still never ends).
 - **24-bit silence**: nothing here touches formats. Expected unchanged; not retested.
 
 ## Building
@@ -108,7 +107,8 @@ In this order:
    not from this code: the DSP may expect the 24 bits in the top of the 32-bit word, which would make ALSA's
    `S24_LE` 48 dB quieter rather than broken. Play 32-bit MSB-aligned data declared as `S24_LE` at the normal volume
    setting and note what comes out.
-7. dmix: retest the case in [docs/known-issues.md](../../docs/known-issues.md#audio) and record the result.
+7. dmix: `aplay` of 1 s through a `dmix` pcm on `hw:0,0` ends in about 1 s; two at once both end in time and are
+   heard mixed. `/etc/asound.conf` does not use dmix (yet): define a `dmix` pcm to try it.
 8. To roll back: `./install-module.sh restore` and a reboot.
 
 ## Results on the device (2026-11-13)
@@ -127,9 +127,14 @@ Also with the rebuilt modules: the sound card, `thinksmart-audio` and the microp
 suspend with a stream open resumes with the underrun detected and playback going on; in normal use a voice answer
 and AirPlay music play with no underrun. The AirPlay pause still takes 2-3 s: the receiver does not drop its queue yet.
 
+dmix (0004), with a `dmix` pcm on `hw:0,0` (periods of 480 × 4): on the stock modules and with 0001-0003 `aplay` of 1 s
+never ends (killed after 8 s); with 0004 it ends in 1.08 s, and two `aplay` at once (2 s and 1 s, the second started
+0.5 s later) end in 2.08 s and 1.03 s. Two tones played that way are heard together. `restart-test.py` unchanged
+with 0004 (every step `ok`).
+
 ## Upstream
 
-0002 and 0003 could be proposed to linux-sound (the ASoC maintainers); they carry no `Signed-off-by` yet. Whether and
+0002, 0003 and 0004 could be proposed to linux-sound (the ASoC maintainers); they carry no `Signed-off-by` yet. Whether and
 when to send them is the owner's decision.
 
 ## License

@@ -107,7 +107,7 @@ image, which is what the receiver needs to be found. No GStreamer GL, ALSA plugi
 
 Screen mirroring decodes H.264 on the hardware: build with `venus-core.ko` in `PARTS_DIR`
 ([driver/venus](../driver/venus/README.md)); see [known-issues.md](../docs/known-issues.md#video) for what the
-pipeline needs on this device. The speaker cannot be shared (no dmix), so the receiver's audio either owns the speaker
+pipeline needs on this device. The speaker cannot be shared on the stock q6asm modules (no dmix; see [driver/q6asm](../driver/q6asm/README.md)), so the receiver's audio either owns the speaker
 or goes to the application that does.
 
 Measured on test builds of v0.3-rc3 (same configuration):
