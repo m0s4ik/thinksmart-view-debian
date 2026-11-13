@@ -109,8 +109,8 @@ machine:
 
 Build `snd-soc-tas5782m.ko` as described in [driver/tas5782m/README.md](../driver/tas5782m/README.md) and copy it to
 `image/parts/` (optional: `vcnl4000.ko` for the light sensor, [driver/vcnl4000/README.md](../driver/vcnl4000/README.md),
-`venus-core.ko` for the hardware video decoder, [driver/venus/README.md](../driver/venus/README.md), and, v0.5-rc and
-not yet tested on a device, `q6asm.ko` + `q6asm-dai.ko` for playback that restarts after a stop or an underrun,
+`venus-core.ko` for the hardware video decoder, [driver/venus/README.md](../driver/venus/README.md), and, v0.5-rc,
+`q6asm.ko` + `q6asm-dai.ko` for playback that restarts after a stop or an underrun,
 [driver/q6asm/README.md](../driver/q6asm/README.md)). The CI of this repository builds all of them for the 7.1.3 kernel:
 you can also take them from the artifacts of a green run.
 

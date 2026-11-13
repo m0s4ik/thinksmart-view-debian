@@ -40,7 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
-| `driver/q6asm/` | optional audio stream modules (v0.5-rc, not yet tested on a device): `q6asm` + `q6asm-dai` with three patches so playback restarts after a stop or an underrun, built out of tree; `install-module.sh`, `restart-test.py` |
+| `driver/q6asm/` | optional audio stream modules (v0.5-rc, tested on a device): `q6asm` + `q6asm-dai` with three patches so playback restarts after a stop or an underrun, built out of tree; `install-module.sh`, `restart-test.py` |
 | `driver/s5kc505a/` | optional front camera: jethac's sensor driver with our flip controls (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env`, or by hand |
 
 ## Commands and the checks that must pass

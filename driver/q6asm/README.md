@@ -1,6 +1,6 @@
 # q6asm audio stream modules (v0.5-rc)
 
-**Status: built and checked by CI, not yet tested on a device (v0.5-rc).** Optional: an image without these modules
+**Status: v0.5-rc, tested on a device** (installed with `install-module.sh` on v0.4, results below). Optional: an image without these modules
 uses the kernel package's ones, as v0.4 does.
 
 `q6asm` (the client of the DSP's audio stream manager) and `q6asm-dai` (the ALSA PCM on top of it) of the 7.1.3
@@ -34,8 +34,8 @@ other changes to these two files are a comment typo and `devm_kzalloc_obj` conve
 ## What it does not fix
 
 - **dmix** ([docs/known-issues.md](../../docs/known-issues.md#audio)): the driver queues data only when `appl_ptr`
-  moves, and dmix never moves it. Expected unchanged; to be retested.
-- **24-bit silence**: nothing here touches formats. Expected unchanged; to be retested.
+  moves, and dmix never moves it. Retested: unchanged (`aplay` on dmix still never ends).
+- **24-bit silence**: nothing here touches formats. Expected unchanged; not retested.
 
 ## Building
 
@@ -86,12 +86,11 @@ library, `ctypes` on `libasound.so.2`) plays short tones at −20 dBFS (`--quiet
 | 1 | write 1 s, drop, prepare, write 1 s at another pitch, drain | the second second is accepted in ~1 s; two beeps heard | 0002 |
 | 2 | write 0.3 s, sleep 1 s, check the state, recover with prepare, write 0.5 s | `XRUN` after the sleep; playback continues after recovery | 0001 + 0002 |
 | 3 | write 0.5 s, drain | drain returns in under ~1.5 s | 0001 |
-| 4 | `--cycles` times: write 1…7 periods (the stop falls mid-lap), drop, prepare, write one full buffer, wait one period | avail ≤ 2 periods, no immediate xrun; no stale burst heard | 0003 |
+| 4 | `--cycles` times: write 1…7 periods (the stop falls mid-lap), drop, prepare, write one full buffer, wait one period | avail the same wherever the previous run stopped and below the whole ring, no immediate xrun | 0003 |
 | 5 | only with `--capture-device`: read 0.5 s, drop, prepare, read 0.5 s | both reads complete in time | 0001 + 0003 on capture |
 
-On the stock modules step 2 never reaches `XRUN`: that is the expected "before" result. The limit of step 4 is a first
-guess (it assumes the DSP returns buffers as it plays them): compare it with the baseline before calling it a
-failure. `--device null` runs the script without a sound card, as a dry run that says nothing about the driver.
+On the stock modules step 2 never reaches `XRUN`: that is the expected "before" result. Step 4 sounds like a burst of
+clicks by design (fragments of 10-70 ms cut without a fade): judge it by the numbers, not by ear. `--device null` runs the script without a sound card, as a dry run that says nothing about the driver.
 
 In this order:
 
@@ -111,6 +110,22 @@ In this order:
    setting and note what comes out.
 7. dmix: retest the case in [docs/known-issues.md](../../docs/known-issues.md#audio) and record the result.
 8. To roll back: `./install-module.sh restore` and a reboot.
+
+## Results on the device (2026-11-13)
+
+`restart-test.py --capture-device plughw:0,1`, with `home-companion` stopped:
+
+| Step | Stock modules (v0.4) | Rebuilt modules |
+|---|---|---|
+| 1 | FAIL: 3839 of 48000 frames accepted after the re-prepare, then stalled; drain timed out | ok: 0.94 s, drain 0.04 s; two clean beeps |
+| 2 | FAIL: still `RUNNING` after 1 s without data; drain timed out | ok: `XRUN`, recovery plays on |
+| 3 | FAIL: drain timed out (3 s) | ok: 0.04 s |
+| 4 | FAIL: avail 1919 (the whole ring minus the frame of 0001) on every restart | ok: avail 1440 on every restart, wherever the previous run stopped (the DSP takes three periods ahead) |
+| 5 | ok | ok |
+
+Also with the rebuilt modules: the sound card, `thinksmart-audio` and the microphones come up at boot (taint `OE`); a
+suspend with a stream open resumes with the underrun detected and playback going on; in normal use a voice answer
+and AirPlay music play with no underrun. The AirPlay pause still takes 2-3 s: the receiver does not drop its queue yet.
 
 ## Upstream
 

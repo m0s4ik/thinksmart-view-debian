@@ -19,8 +19,8 @@ built into the image with a [customization script](#customization) or installed 
   `snd-soc-tas5782m.ko` ([driver/tas5782m](../driver/tas5782m/README.md)) and
   `mesa-freedreno_<version>_arm64.deb` (with `build-mesa.sh`, dependencies at the top of the script).
   Optional: `vcnl4000.ko` ([driver/vcnl4000](../driver/vcnl4000/README.md)), `venus-core.ko`
-  ([driver/venus](../driver/venus/README.md)), `q6asm.ko` + `q6asm-dai.ko` (both or neither; v0.5-rc, not yet tested
-  on a device: [driver/q6asm](../driver/q6asm/README.md)); for the web layer, `libwpewebkit-2.0-1_<version>_arm64.deb` (with
+  ([driver/venus](../driver/venus/README.md)), `q6asm.ko` + `q6asm-dai.ko` (both or neither; v0.5-rc:
+  [driver/q6asm](../driver/q6asm/README.md)); for the web layer, `libwpewebkit-2.0-1_<version>_arm64.deb` (with
   `build-wpe.sh`); for the front camera, `s5kc505a.ko` and `apq8053-lenovo-cd-18781y-camera.dtb`
   ([driver/s5kc505a](../driver/s5kc505a/README.md), both built by CI).
 
@@ -239,7 +239,7 @@ and the AirPlay runtime are off too).
 
 ### From v0.4 to v0.5-rc
 
-v0.5-rc, not yet tested on a device. The playback restart fixes are two kernel modules: build them
+The playback restart fixes are two kernel modules: build them
 ([driver/q6asm](../driver/q6asm/README.md#building), or take the CI artifact `q6asm-7.1.3-msm8953`), copy them with
 `driver/q6asm/install-module.sh` to the device, run `./install-module.sh <dir>` as root, then reboot. The script keeps
 the original pair; `./install-module.sh restore` and a reboot go back. Nothing in the boot path uses these modules: a
