@@ -11,8 +11,8 @@ block is bounded: the stream is opened non-blocking and waits use snd_pcm_wait()
   2  write 0.3 s, sleep 1 s, recover with prepare, write 0.5 s     the state is XRUN after the sleep (the stock
                                                                     kernel stays RUNNING: no underrun is detected)
   3  write 0.5 s, drain                                            drain returns in under ~1.5 s
-  4  --cycles times: write 1..7 periods, drop, prepare, write one  avail <= 2 periods and no xrun right after the
-     full buffer, wait one period                                   restart (no stale position, no stale burst)
+  4  --cycles times: write 1..7 periods, drop, prepare, write one  avail the same wherever the previous run stopped,
+     full buffer, wait one period                                   below the whole ring, no xrun (no stale position)
   5  with --capture-device: read 0.5 s, drop, prepare, read 0.5 s  both reads complete in time
 
 Tell the people around the device before running it: it plays sound (unless --quiet). It does not change the volume.
@@ -231,9 +231,11 @@ def playback_steps(pcm, args):
     report(3, how == "ok" and drained is not None and drained < 1.5,
            f"drain after 0.5 s: {'timed out (3 s)' if drained is None else f'{drained:.2f} s'}")
 
-    # 4: restarts that stop in the middle of a lap (0003)
+    # 4: restarts that stop in the middle of a lap (0003). One period after the restart the position depends only on
+    # how far ahead the DSP takes buffers (3 periods measured on the device): it must be the same wherever the previous
+    # run stopped. A stale buffer index or hw_ptr makes it depend on k (the stock modules: always the whole ring).
     full = tone(rate, pcm.buffer / rate, 392, q)
-    worst, bad = 0, []
+    seen, bad = {}, []
     for c in range(args.cycles):
         k = 1 + c % 7
         pcm.restart()
@@ -242,11 +244,16 @@ def playback_steps(pcm, args):
         n, how = pcm.write(full, 1.0)
         time.sleep(pcm.period / rate)
         av, st = pcm.avail(), pcm.state()
-        worst = max(worst, av)
-        if how != "ok" or st == "XRUN" or av < 0 or av > 2 * pcm.period:
+        seen.setdefault(k, set()).add(av)
+        if how != "ok" or st == "XRUN" or av < 0 or av >= pcm.buffer - 1:
             bad.append(f"cycle {c + 1} ({k} periods): {how}, {st}, avail {av}")
     pcm.drop()
-    report(4, not bad, f"{args.cycles} restarts, largest avail {worst} frames (limit {2 * pcm.period})"
+    values = sorted(set().union(*seen.values()))
+    if values[-1] - values[0] > pcm.period // 4:
+        bad.append("avail depends on where the previous run stopped: "
+                   + ", ".join(f"{k}: {sorted(v)}" for k, v in sorted(seen.items())))
+    report(4, not bad, f"{args.cycles} restarts, avail after one period {values} frames "
+           f"(same for every stop point, below the whole ring of {pcm.buffer})"
            + ("; " + "; ".join(bad[:3]) if bad else ""))
 
 
