@@ -30,9 +30,14 @@ On Linux, `edl` needs raw access to the USB device: install the udev rules shipp
 [bkerler/edl](https://github.com/bkerler/edl) or run it with `sudo`, and stop ModemManager
 (`sudo systemctl stop ModemManager`), which otherwise grabs the device.
 
-From [rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart) download `prebuilt/lk2nd.img`, the
-postmarketOS bootstrap image and `apply-ubuntu-gpt.sh`. Decompress the bootstrap image first if it is compressed,
-and rename it to `bootstrap.img`.
+From [rickx/ubuntu-thinksmart](https://github.com/rickx/ubuntu-thinksmart) download three files:
+
+- [`prebuilt/lk2nd.img`](https://github.com/rickx/ubuntu-thinksmart/blob/main/prebuilt/lk2nd.img) (the bootloader);
+- the postmarketOS bootstrap image, `bootstrap-pmos-ssh-generic-qcom-msm8953.img`, from his
+  [releases](https://github.com/rickx/ubuntu-thinksmart/releases) (`bootstrap-<date>`, with a `.sha256`): check it,
+  decompress it if it is compressed, and rename it to `bootstrap.img`;
+- [`sources/scripts/apply-ubuntu-gpt.sh`](https://github.com/rickx/ubuntu-thinksmart/blob/main/sources/scripts/apply-ubuntu-gpt.sh)
+  (the larger partition layout, step 7).
 
 ## 2. Backup over EDL
 
