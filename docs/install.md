@@ -11,8 +11,8 @@ firmware and modules come from postmarketOS and from your own device. You build 
 
 ## What you need
 
-- A **Lenovo ThinkSmart View CD-18781Y** with its power supply. Tested on the Himax panel variant; the FT8201 variant
-  needs a different device tree (see [hardware.md](hardware.md)).
+- A **Lenovo ThinkSmart View CD-18781Y** with its power supply. Tested on the Himax panel variant; one unit with the
+  FT8201 panel runs the same image with these steps unchanged (see [hardware.md](hardware.md#the-ft8201-panel-variant)).
 - A **USB-A to USB-C cable** (the device's USB-C port has no CC resistors: a plain C-to-C cable is often not seen).
 - A **Linux machine** (Debian/Ubuntu, x86_64 or arm64; a VM with loop devices is fine) with root and **~20 GB
   free**: ~8 GB for the EDL backup, up to ~10 GB for the image build in `WORK_DIR`, ~2 GB for the kernel source and
