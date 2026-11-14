@@ -19,7 +19,7 @@ running). This project is not affiliated with or endorsed by Lenovo; ThinkSmart 
 [<img src="https://img.shields.io/badge/license-GPL--3.0--or--later-blue">](LICENSE)
 [<img src="https://img.shields.io/badge/Buy%20me%20a%20coffee-m0s4ik-FFDD00?logo=buymeacoffee&logoColor=black">](https://buymeacoffee.com/m0s4ik)
 
-<a href="#what-runs-on-it">What runs on it</a> | <a href="docs/install.md">Installation guide 🚀</a> | <a href="docs/hardware.md">Hardware</a> |
+<a href="#built-on-it">Built on it</a> | <a href="docs/install.md">Installation guide 🚀</a> | <a href="docs/hardware.md">Hardware</a> |
 <a href="docs/flashing.md">Flashing over EDL</a> | <a href="docs/known-issues.md">Known issues</a>
 
 **⭐ If you have one of these devices gathering dust, give it a second life, and star the repo if it helps!**
@@ -108,18 +108,21 @@ the boot report and the `/boot` timeout change. Upgrading a device in place:
 v0.3 brought Mesa 26.3.0 in `/usr`, the optional web layer and AirPlay runtime, application firewall rules, mDNS, the
 hardware video decoder and 16-bit audio ([release notes](https://github.com/m0s4ik/thinksmart-view-debian/releases/tag/v0.3)).
 
-## What runs on it
+## Built on it
 
-The system is a base: the application is yours. Ours is
-**[home-companion](https://github.com/m0s4ik/home-companion)**, a lightweight voice companion for Home Assistant
-with **Alfred**, an elderly butler, on the screen: a wake word heard on the device, local timers and alarms, AirPlay
-music and screen mirroring, and the Home Assistant dashboard one tap away. The thinking is done by the AI you already
-set up in Home Assistant. It is what the optional layers are for: `WEB=1` for the dashboard, `AIRPLAY=1` and the video
-decoder for AirPlay, the freedreno fixes for the web engine on the GPU.
+The system is a base: the application is yours. Projects that run on it:
 
-<p align="center"><img src="https://raw.githubusercontent.com/m0s4ik/home-companion/main/docs/images/device-home.png" width="640" alt="A ThinkSmart View running home-companion: Alfred's home screen with the clock, the weather, a reminder, a timer and AirPlay music, and the HA, Talk and More buttons"></p>
+- **[home-companion](https://github.com/m0s4ik/home-companion)** (ours): a lightweight voice companion for Home
+  Assistant with **Alfred**, an elderly butler, on the screen: a wake word heard on the device, local timers and
+  alarms, AirPlay music and screen mirroring, the Home Assistant dashboard one tap away; the thinking is done by the AI
+  you already set up in Home Assistant. It is what the optional layers are for: `WEB=1` for the dashboard,
+  `AIRPLAY=1` and the video decoder for AirPlay, the freedreno fixes for the web engine on the GPU.
 
-Built something else on this system? Open an issue with a link: we'll add it here.
+<p align="center"><img src="https://raw.githubusercontent.com/m0s4ik/home-companion/main/docs/images/device-home.png" width="560" alt="A ThinkSmart View running home-companion: Alfred's home screen with the clock, the weather, a reminder, a timer and AirPlay music, and the HA, Talk and More buttons"></p>
+
+**Built something on this system?** Add it with a pull request: one line in this list, in the same form (name and
+link, then one sentence on what it does), at the end. It should be public and run on this image (say which options, if
+any: `WEB=1`, `AIRPLAY=1`, `CAMERA=1`). No repository yet? Open an issue with a few screenshots.
 
 ## Installation
 
