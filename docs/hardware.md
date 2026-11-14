@@ -1,13 +1,14 @@
 # Hardware notes (Lenovo ThinkSmart View CD-18781Y)
 
-What we found on our unit (Himax panel variant) with the postmarketOS kernel 7.1.3-msm8953.
+What we found on our unit (Himax panel variant) with the postmarketOS kernel 7.1.3-msm8953. A second unit, with the
+FocalTech FT8201 panel, runs the same image: [below](#the-ft8201-panel-variant).
 
 | Part | Details | Status |
 |---|---|---|
 | SoC | Qualcomm APQ8053 (MSM8953 family, 8× Cortex-A53), Adreno 506 | ok |
 | RAM / storage | 2 GB / eMMC 8 GB (15,269,888 sectors of 512 bytes) | ok |
-| Display | **Himax HX83100A** panel, 800×1280 portrait, DT `apq8053-lenovo-cd-18781y.dtb` (`lenovo,cd-18781y-hx83100a`). Framebuffer `msmdrmfb` (DRM msm fbdev emulation): 32 bpp, B,G,R,X byte order, 3200-byte lines. Backlight `/sys/class/backlight/backlight/brightness` 0-4095 | ok (works on 6.12 and 7.1.3; one report of a black screen with 6.19 elsewhere). Units with the FocalTech FT8201 panel use a different DT compatible |
-| Touch | Himax touchscreen on i2c-2, address 0x48, `/dev/input/by-path/platform-78b7000.i2c-event`, single touch `ABS_X`/`ABS_Y` 0-799 × 0-1279 | ok |
+| Display | **Himax HX83100A** panel, 800×1280 portrait, DT `apq8053-lenovo-cd-18781y.dtb` (`lenovo,cd-18781y-hx83100a`). Framebuffer `msmdrmfb` (DRM msm fbdev emulation): 32 bpp, B,G,R,X byte order, 3200-byte lines. Backlight `/sys/class/backlight/backlight/brightness` 0-4095 | ok (works on 6.12 and 7.1.3; one report of a black screen with 6.19 elsewhere). Units with the FocalTech FT8201 panel get `lenovo,cd-18781y-ft8201` from lk2nd: [below](#the-ft8201-panel-variant) |
+| Touch | Himax touchscreen on i2c-2, address 0x48, `/dev/input/by-path/platform-78b7000.i2c-event`, single touch `ABS_X`/`ABS_Y` 0-799 × 0-1279 (FT8201 units: multi-touch, [below](#the-ft8201-panel-variant)) | ok |
 | Speaker | **TI TAS5782M** on I²C 1, address 0x49, out-of-tree driver ([driver/tas5782m](../driver/tas5782m/README.md)), DSP firmware `tas5728m_dsp_lenovo_cd-18781y.bin`. Card `cd-18781y`, playback `hw:0,0` | ok, hardware volume `Speaker Amp Master` (1 dB per step). 16-bit playback only: S24_LE plays silence, so `/etc/asound.conf` converts to S16_LE ([known-issues.md](known-issues.md)) |
 | Microphones | 2 digital microphones on `hw:0,1` (2 channels), gain `TX1/TX2 Digital Volume` 115 from UCM, noise floor about -32 dBFS RMS, no clipping with speech | ok |
 | Wi-Fi | **Qualcomm QCA9379** (ath10k SDIO), firmware `WLAN.NPL.1.6-00163`, board file from the firmware package | ok; a roam between access points can drop the link for ~3 s ([known-issues.md](known-issues.md)) |
@@ -22,6 +23,37 @@ What we found on our unit (Himax panel variant) with the postmarketOS kernel 7.1
 | USB-C | data only | no USB gadget (no network over USB) and no host mode with this kernel |
 | "Headset Jack" input | reported by the sound card | not a real jack (there is none on the device): ignore it |
 | Power | separate barrel power supply; USB-C for data only (no CC resistors) | |
+
+## The FT8201 panel variant
+
+Some units have a **FocalTech FT8201** panel instead of the Himax one: display and touch controller in one chip
+(TDDI). Under Android: `panel_name=boyift8201 800p video mode dsi panel` in `/sys/class/graphics/fb0/msm_fb_panel_info`
+and the touch input device `fts_ts` (stock firmware, [#4](https://github.com/m0s4ik/thinksmart-view-debian/issues/4));
+with root, `mdss_mdp.panel=1:dsi:0:qcom,mdss_dsi_boyift8201_800p_video:…` in `/proc/cmdline` (LineageOS). Himax
+units say `hx83100a` instead.
+
+Nothing in the image changes: lk2nd reads the panel from the stock bootloader and patches the same
+`apq8053-lenovo-cd-18781y.dtb` (panel `lenovo,cd-18781y-ft8201`, the FT8201 touch node enabled instead of the Himax
+one), and the 7.1.3 kernel package has both panel drivers. Two FT8201 units run the v0.4 image with the steps of
+[install.md](install.md) unchanged: the one in [#4](https://github.com/m0s4ik/thinksmart-view-debian/issues/4) (plain
+image, `CAMERA=0`) and one with `WEB=1 AIRPLAY=1` and m0s4ik/home-companion 0.2.0 (built from `0b481a3`, rickx's
+prebuilt lk2nd `20.0-next-b9c007bb5492-20250123`), where this was found:
+
+| Part | FT8201 unit | Status |
+|---|---|---|
+| Display | module `panel_lenovo_cd_18781y_ft8201`, same framebuffer and backlight (`/sys/class/backlight/backlight`, 0-4095) | ok on the bootstrap's 6.12, after its upgrade to 7.1.3 and in the Debian image |
+| Touch | `generic ft5x06 (09)` (`edt_ft5x06`) on i2c-2, address 0x38, same `/dev/input/by-path/platform-78b7000.i2c-event`; **multi-touch**, 10 slots, `ABS_MT_POSITION_X`/`_Y` 0-799 × 0-1279 (also `ABS_X`/`ABS_Y`) | ok |
+| Wi-Fi, audio | `nmcli` state 100 (connected), card `cd-18781y` | ok |
+| Web layer, AirPlay | home-companion's Home Assistant view (WPE WebKit): 50-60 fps, `WPEWebProcess` ~390 MB + `WPENetworkProcess` ~85 MB RSS; screen mirroring from a phone over AirPlay, picture and sound | ok |
+| Front camera | installed by hand as in [driver/s5kc505a](../driver/s5kc505a/README.md#installing) (the v0.4 CI artifacts): lk2nd sets the FT8201 panel in the camera DTB as well (display and touch unchanged); a raw 1304×980 frame with both flips is upright with natural colours; libcamera not tried | ok, raw frames |
+
+Seen in the kernel log while the panel driver probes (the panel works anyway; not compared with a Himax unit): on 7.1.3
+`WARNING: drivers/clk/qcom/clk-rcg2.c:136 at update_config` with `boyift8201_800p_probe` in the trace (twice); on the
+bootstrap's 6.12 `Unbalanced enable for IRQ 31` from `wled_ovp_work`.
+
+Not tested: whether touch keeps working after the panel is blanked. The FT8201 shares its reset between display and
+touch, and community kernels for this device patch the panel driver so that blanking does not stop the touch
+controller; 7.1.3 does not have that patch. Dimming the backlight (`brightness` 0) is not blanking.
 
 ## Camera
 
