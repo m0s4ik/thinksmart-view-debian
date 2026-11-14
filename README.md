@@ -120,6 +120,10 @@ The system is a base: the application is yours. Projects that run on it:
 
 <p align="center"><img src="https://raw.githubusercontent.com/m0s4ik/home-companion/main/docs/images/device-home.png" width="560" alt="A ThinkSmart View running home-companion: Alfred's home screen with the clock, the weather, a reminder, a timer and AirPlay music, and the HA, Talk and More buttons"></p>
 
+- **[Thinksmart-Home](https://github.com/rabfulton/Thinksmart-Home)** (by rabfulton): a native Qt Quick dashboard with
+  a voice assistant, radio, weather, music (Jellyfin, Navidrome), films, news and chess, in landscape and portrait;
+  you choose the modules.
+
 **Built something on this system?** Add it with a pull request: one line in this list, in the same form (name and
 link, then one sentence on what it does), at the end. It should be public and run on this image (say which options, if
 any: `WEB=1`, `AIRPLAY=1`, `CAMERA=1`). No repository yet? Open an issue with a few screenshots.
