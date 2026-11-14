@@ -27,14 +27,17 @@ FocalTech FT8201 panel, runs the same image: [below](#the-ft8201-panel-variant).
 ## The FT8201 panel variant
 
 Some units have a **FocalTech FT8201** panel instead of the Himax one: display and touch controller in one chip
-(TDDI). Under Android the kernel command line says which one: `mdss_mdp.panel=1:dsi:0:qcom,mdss_dsi_boyift8201_800p_video:…`
-(Himax units: `…hx83100a…`; `cat /proc/cmdline` needs root), and on LineageOS the touch input device is `fts_ts`.
+(TDDI). Under Android: `panel_name=boyift8201 800p video mode dsi panel` in `/sys/class/graphics/fb0/msm_fb_panel_info`
+and the touch input device `fts_ts` (stock firmware, [#4](https://github.com/m0s4ik/thinksmart-view-debian/issues/4));
+with root, `mdss_mdp.panel=1:dsi:0:qcom,mdss_dsi_boyift8201_800p_video:…` in `/proc/cmdline` (LineageOS). Himax
+units say `hx83100a` instead.
 
 Nothing in the image changes: lk2nd reads the panel from the stock bootloader and patches the same
 `apq8053-lenovo-cd-18781y.dtb` (panel `lenovo,cd-18781y-ft8201`, the FT8201 touch node enabled instead of the Himax
-one), and the 7.1.3 kernel package has both panel drivers. Checked on one FT8201 unit (v0.4 image, built from
-`0b481a3`), installed with the steps of [install.md](install.md) unchanged, rickx's prebuilt lk2nd
-`20.0-next-b9c007bb5492-20250123`:
+one), and the 7.1.3 kernel package has both panel drivers. Two FT8201 units run the v0.4 image with the steps of
+[install.md](install.md) unchanged: the one in [#4](https://github.com/m0s4ik/thinksmart-view-debian/issues/4) (plain
+image, `CAMERA=0`) and one with `WEB=1 AIRPLAY=1` and m0s4ik/home-companion 0.2.0 (built from `0b481a3`, rickx's
+prebuilt lk2nd `20.0-next-b9c007bb5492-20250123`), where this was found:
 
 | Part | FT8201 unit | Status |
 |---|---|---|

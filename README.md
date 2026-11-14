@@ -111,7 +111,7 @@ hardware video decoder and 16-bit audio ([release notes](https://github.com/m0s4
 ## Installation
 
 > [!NOTE]
-> **Requirements:** a ThinkSmart View CD-18781Y (tested on the Himax panel variant; also reported working on one FT8201 unit), a USB-A to USB-C cable, a
+> **Requirements:** a ThinkSmart View CD-18781Y (tested on the Himax panel variant; also reported working on two FT8201 units), a USB-A to USB-C cable, a
 > Debian/Ubuntu machine (or VM) with root and ~20 GB free (EDL backup, image build, kernel source and Mesa build).
 
 > [!WARNING]
@@ -162,7 +162,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Front camera (S5KC505A), optional (`CAMERA=1`): raw frames, upright frames through libcamera 0.7 on the GPU,
   full size (v0.4)
 - [ ] Camera sensor tuning (colours are acceptable untuned with libcamera 0.7)
-- [x] FT8201 panel variant: same image, working on one unit ([hardware.md](docs/hardware.md#the-ft8201-panel-variant))
+- [x] FT8201 panel variant: same image, working on two units ([hardware.md](docs/hardware.md#the-ft8201-panel-variant))
 
 ## Credits
 
