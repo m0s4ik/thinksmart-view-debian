@@ -50,8 +50,8 @@ v0.4).</sub>
 
 | | |
 |---|---|
-| 🖥️ **Display** | 800×1280 Himax panel, framebuffer `/dev/fb0`, backlight 0-4095 |
-| ✋ **Touch** | Himax touchscreen (evdev) |
+| 🖥️ **Display** | 800×1280 Himax or FT8201 panel, framebuffer `/dev/fb0`, backlight 0-4095 |
+| ✋ **Touch** | Himax touchscreen, or FT8201 multi-touch (evdev) |
 | 🎮 **GPU** | Adreno 506 with a reduced Mesa 26.3 (freedreno, OpenGL ES 3.1, EGL/GBM, Wayland platform, no LLVM): 60 fps with vsync |
 | 🎞️ **Video decoder** | Venus hardware decoder (H.264, HEVC, VP8, VP9, MPEG-2/4) through V4L2, with a rebuilt `venus-core` module: 1080p30 H.264 with ~5% of one core |
 | 🌐 **Web (optional)** | WPE WebKit 2.54 on the GPU with its sandbox, for an application that shows web pages (`WEB=1`) |
@@ -111,7 +111,7 @@ hardware video decoder and 16-bit audio ([release notes](https://github.com/m0s4
 ## Installation
 
 > [!NOTE]
-> **Requirements:** a ThinkSmart View CD-18781Y (tested on the Himax panel variant), a USB-A to USB-C cable, a
+> **Requirements:** a ThinkSmart View CD-18781Y (tested on the Himax panel variant; also reported working on two FT8201 units), a USB-A to USB-C cable, a
 > Debian/Ubuntu machine (or VM) with root and ~20 GB free (EDL backup, image build, kernel source and Mesa build).
 
 > [!WARNING]
@@ -162,7 +162,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Front camera (S5KC505A), optional (`CAMERA=1`): raw frames, upright frames through libcamera 0.7 on the GPU,
   full size (v0.4)
 - [ ] Camera sensor tuning (colours are acceptable untuned with libcamera 0.7)
-- [ ] FT8201 panel variant
+- [x] FT8201 panel variant: same image, working on two units ([hardware.md](docs/hardware.md#the-ft8201-panel-variant))
 
 ## Credits
 

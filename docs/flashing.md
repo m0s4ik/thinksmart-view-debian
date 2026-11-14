@@ -24,7 +24,12 @@ unlocked bootloader.
 3. The screen stays black; the host sees a Qualcomm `QUSB__BULK` device (USB ID `05c6:9008`;
    `lsusb` on Linux, `ioreg -p IOUSB` on macOS).
 
+From Android with adb enabled (LineageOS, for example) `adb reboot edl` does the same without the buttons.
+
 `edl reset` reboots the device. It may print `USBError(5)`; the device reboots anyway.
+
+The device does not stay in EDL forever: on one unit it dropped off the bus a few minutes after the last command.
+Run the commands one after the other, and if `05c6:9008` is gone, enter EDL again.
 
 ## 1. Full backup
 
@@ -37,6 +42,22 @@ The eMMC is 7,818,182,656 bytes (15,269,888 sectors). **Check the size of the fi
 (`gzip` brings it to ~1.1 GB on a device that was never used; more if the partitions hold more data). Also save the partition table: `edl printgpt > gpt-original.txt`.
 
 Restore (everything, including the partition table): `edl wf stock-full-emmc.bin`.
+
+If `edl rf` stops halfway (on one unit behind a monitor's USB hub the connection dropped at 68 % and `edl` kept
+printing `USBError` without exiting), read the eMMC in parts with `edl rs` and join them. A part that fails is read
+again after entering EDL again; the parts already read stay:
+
+```bash
+for ((start = 0; start < 15269888; start += 1048576)); do   # 15 parts of 512 MiB, the last one shorter
+  count=$((15269888 - start)); [ "$count" -gt 1048576 ] && count=1048576
+  f=$(printf 'part-%08d.bin' "$start")
+  [ "$( { wc -c < "$f"; } 2>/dev/null)" -eq $((count * 512)) ] 2>/dev/null || edl rs "$start" "$count" "$f"
+done
+cat part-*.bin > stock-full-emmc.bin                    # then check: 7,818,182,656 bytes
+```
+
+Stop a stalled `edl rs` with Ctrl-C (it does not exit on its own) and run the loop again. Reading every part a second
+time and comparing the two (`cmp`) shows that the backup is good.
 
 ## 2. lk2nd and the bootstrap
 
@@ -53,8 +74,24 @@ From now on Android does not boot any more; the backup brings it back.
 ## 3. Repartitioning
 
 Android's `system` partition is too small for comfort. rickx's `apply-ubuntu-gpt.sh` (from the same repository;
-follow its instructions) rewrites the GPT: `vendor`, `cache` and `userdata` are removed and `system` grows to the end
-of the eMMC. `boot` (lk2nd), `modem` and `persist` (firmware read at runtime by msm-firmware-loader) are untouched.
+follow its instructions) rewrites the GPT: partitions 1-23 (among them `boot` with lk2nd and `modem`) stay as they
+are; every partition after `system` (p25-p51: `vendor`, `cache`, `persist`, `oem`, … `userdata`) is removed; `system`
+grows to sector 15204318 and a new **`persist`** (p27, 65536 sectors) takes the last 32 MiB of the eMMC.
+
+The new `persist` does not get the old one's contents: the old `persist` (p27 of the stock GPT, sector 5238784, 65536
+sectors) now lies inside `system` and the image overwrites it, and the new one holds whatever `userdata` left there.
+msm-firmware-loader mounts `persist` read-only; the only file it links from it is `WCNSS_qcom_wlan_nv.bin`, which is
+for Qualcomm's WCNSS Wi-Fi (this device's Wi-Fi is the QCA9379, `ath10k`). To keep the original contents anyway (Android's
+calibration files), copy them from the full backup into the new `persist`, over EDL after repartitioning:
+
+```bash
+dd if=stock-full-emmc.bin of=persist-original.bin bs=512 skip=5238784 count=65536
+edl ws 15204319 persist-original.bin       # by sector: see below why not "edl w persist"
+```
+
+`edl` at commit 1cda1a6 stops reading the GPT at the first empty entry, so after repartitioning `edl printgpt` ends at
+`system` and does not find `persist` (p27 comes after the empty p25 and p26; fix proposed in
+[bkerler/edl#840](https://github.com/bkerler/edl/pull/840)). Linux and `sfdisk -l` on the device see all 25.
 
 On our device, after the script: `system` starts at sector 923648 and is **14,280,671 sectors** (6.8 GB) long. That is
 the default `SYSTEM_SECTORS` of `image/build.sh`; check yours with `edl printgpt` and, if different, set it in

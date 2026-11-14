@@ -42,7 +42,7 @@ next to the original (and `s5kc505a.ko`) only if they match.
    fails: `doas ln -s /usr/lib/modules/7.1.3-msm8953 /lib/modules/7.1.3-msm8953 && doas depmod -a 7.1.3-msm8953`.
    lk2nd only handles **one** entry in `extlinux.conf` (it ignores `default`; the last entry's lines overwrite the
    first), so keep a copy of the old file to go back.
-4. Reboot; screen, touch and Wi-Fi work on 7.1.3 with the Himax panel.
+4. Reboot; screen, touch and Wi-Fi work on 7.1.3 with the Himax panel (and on two units with the FT8201 panel).
 5. From the build machine: `./image/fetch-parts.sh user@device` copies the four tar files to `image/parts/`.
 6. Build `snd-soc-tas5782m.ko` (and, optionally, `vcnl4000.ko` for the light sensor and `venus-core.ko` for the
    video decoder) and copy them to `image/parts/`.
