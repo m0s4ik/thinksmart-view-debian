@@ -44,6 +44,7 @@ prebuilt lk2nd `20.0-next-b9c007bb5492-20250123`), where this was found:
 | Display | module `panel_lenovo_cd_18781y_ft8201`, same framebuffer and backlight (`/sys/class/backlight/backlight`, 0-4095) | ok on the bootstrap's 6.12, after its upgrade to 7.1.3 and in the Debian image |
 | Touch | `generic ft5x06 (09)` (`edt_ft5x06`) on i2c-2, address 0x38, same `/dev/input/by-path/platform-78b7000.i2c-event`; **multi-touch**, 10 slots, `ABS_MT_POSITION_X`/`_Y` 0-799 × 0-1279 (also `ABS_X`/`ABS_Y`) | ok |
 | Wi-Fi, audio | `nmcli` state 100 (connected), card `cd-18781y` | ok |
+| Web layer, AirPlay | home-companion's Home Assistant view (WPE WebKit): 50-60 fps, `WPEWebProcess` ~390 MB + `WPENetworkProcess` ~85 MB RSS; screen mirroring from a phone over AirPlay | ok |
 
 Seen in the kernel log while the panel driver probes (the panel works anyway; not compared with a Himax unit): on 7.1.3
 `WARNING: drivers/clk/qcom/clk-rcg2.c:136 at update_config` with `boyift8201_800p_probe` in the trace (twice); on the
