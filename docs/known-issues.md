@@ -106,9 +106,9 @@
   at 100 %, the page hung. Seen with WebKit's GPU 2D canvas, WebGL and, with WPE 2.54, some ordinary Home Assistant
   dashboards; in every Mesa up to 26.3.0 and in Mesa's main branch. Root cause found by lzl51230
   ([rickx/ubuntu-thinksmart#5](https://github.com/rickx/ubuntu-thinksmart/pull/5)). On the device, a 1280x800 FBO
-  with 4x MSAA and Z24S8: 60 frames in 0.5 s with the patch, a hang without. On older images (`26.3.0-1` and
-  earlier) the workaround is `FD_MESA_DEBUG=sysmem` (render straight to memory, no tiling) **in the browser's
-  environment only**, never system-wide.
+  with 4x MSAA and Z24S8: 60 frames in 0.5 s with the patch, a hang without. **From v0.5 on, drop
+  `FD_MESA_DEBUG=sysmem`** wherever you set it. On older images (`26.3.0-1` and earlier) it is still the workaround
+  (render straight to memory, no tiling), **in the browser's environment only**, never system-wide.
 - **Debian's Mesa replaces ours if a package asks for it**: `mesa-freedreno` provides `libgbm1` and `libegl-mesa0`
   and conflicts with Debian's Mesa, so apt never installs both; but a package that needs Debian's exact versions
   (`libgbm-dev`, pulled by many `-dev` packages) makes apt propose removing `mesa-freedreno` and installing Debian's

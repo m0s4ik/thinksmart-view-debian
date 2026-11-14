@@ -85,8 +85,11 @@ WebKit itself is ~130 MB of that, ICU ~38 MB, the speech synthesizer flite (a We
 on the pages shown: the web engine took ~450-600 MB for a Home Assistant dashboard on the GPU in a test setup on the
 device (not yet measured on this image).
 
-With `mesa-freedreno` 26.3.0-2 (v0.5) the web engine needs no Mesa workaround. On older images run it with
-`FD_MESA_DEBUG=sysmem` in its own environment (its systemd unit), not system-wide: see
+**No `FD_MESA_DEBUG=sysmem` any more.** With `mesa-freedreno` 26.3.0-2 (v0.5) the web engine runs on freedreno's
+normal tiled path: if a unit of yours sets `FD_MESA_DEBUG=sysmem`, remove it after updating (it only costs speed and
+memory now). Measured on the device: a Home Assistant dashboard ready in ~11 s, ~450 MB, the same as with sysmem; a
+1280x800 test with 4x MSAA and depth that used to hang now draws 60 frames in 0.5 s. Only images before v0.5 (`26.3.0-1` and
+earlier) still need it, in the browser's own environment, never system-wide: see
 [known-issues.md](../docs/known-issues.md#gpu-and-web-layer).
 
 ## AirPlay runtime (optional)

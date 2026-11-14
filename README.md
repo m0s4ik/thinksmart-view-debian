@@ -155,7 +155,8 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [x] Suspend, woken by the volume keys
 - [x] Hardware video decoder (Venus); optional AirPlay runtime
 - [x] Mesa 26.3.0 final (v0.3)
-- [ ] Fix for the freedreno GMEM loop, proposed upstream
+- [x] Fix for the freedreno GMEM loop: no more `FD_MESA_DEBUG=sysmem` (v0.5)
+- [ ] The GMEM fix proposed to Mesa upstream
 - [ ] `poweroff` that stays off with the supply plugged in
 - [x] Faster boot: no initramfs framebuffer wait, 24 s → 14 s (v0.4)
 - [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
