@@ -44,7 +44,8 @@ case "$VER" in
     *) SUM=${MESA_SHA256:-} ;;
 esac
 [ -n "$SUM" ] || { echo "no known sha256 for Mesa $VER: set MESA_SHA256 (after checking the .sig)" >&2; exit 1; }
-DEBVER=${VER/-rc/\~rc}-1
+# -2: image/mesa-patches/0001 (GMEM sizing with MSAA: no more endless loop, no FD_MESA_DEBUG=sysmem needed)
+DEBVER=${VER/-rc/\~rc}-${MESA_DEBREV:-2}
 REPO=$(cd "$(dirname "$0")/.." && pwd)
 OUT=${PARTS_DIR:-$REPO/image/parts}
 W=${MESA_WORK:-/var/tmp/mesa-freedreno-build}
@@ -58,6 +59,12 @@ cd "$W"
 echo "$SUM  mesa-$VER.tar.xz" | sha256sum -c -
 rm -rf "mesa-$VER"
 tar xf "mesa-$VER.tar.xz"
+# Our fixes on top of the release (image/mesa-patches/*.patch, applied in order; each says why in its header)
+for p in "$REPO"/image/mesa-patches/*.patch; do
+    [ -e "$p" ] || continue
+    echo "patch: $(basename "$p")"
+    patch -d "mesa-$VER" -p1 --forward --quiet < "$p"
+done
 
 cross=()
 if [ "$(uname -m)" != aarch64 ]; then

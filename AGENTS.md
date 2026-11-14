@@ -40,7 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
-| `driver/q6asm/` | optional audio stream modules (v0.5-rc, tested on a device): `q6asm` + `q6asm-dai` with four patches so playback restarts after a stop or an underrun and dmix works, built out of tree; `install-module.sh`, `restart-test.py` |
+| `driver/q6asm/` | optional audio stream modules (v0.5-rc, tested on a device): `q6asm` + `q6asm-dai` with three patches so playback restarts after a stop or an underrun and dmix works, built out of tree; `install-module.sh`, `restart-test.py` |
 | `driver/s5kc505a/` | optional front camera: jethac's sensor driver with our flip controls (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env`, or by hand |
 
 ## Commands and the checks that must pass
@@ -86,7 +86,9 @@ nmcli -t -f GENERAL.STATE dev show wlan0  # 100 (connected)
   never install Debian's Mesa (`libgl1-mesa-dri`, `mesa-libgallium`, `libgbm1`). apt cannot put it next to
   `mesa-freedreno`, so it offers to **remove** `mesa-freedreno` instead: read the list of removals before answering yes.
   `-dev` packages (`libgbm-dev`, pulled by GStreamer's or WebKit's `-dev`) do this: build elsewhere.
-  `FD_MESA_DEBUG=sysmem` goes in the browser's environment only, never system-wide.
+  Our Mesa fixes live in `image/mesa-patches/` (applied by `build-mesa.sh`, each with its reason in the header; bump
+  the package revision `MESA_DEBREV` with them). `FD_MESA_DEBUG=sysmem` is only for images before 26.3.0-2, and only
+  in the browser's environment, never system-wide.
 - The camera DTB ([driver/s5kc505a](driver/s5kc505a/README.md)) changes what lk2nd boots: keep the old DTB, keep a
   copy of `extlinux.conf`, and ask before rebooting into it (or flashing a `CAMERA=1` image). `kernel.panic` is 0 and
   there is no watchdog, so a hang needs someone at the device. Never put `fdt` next to `fdtdir` (fdtdir wins) and never

@@ -18,7 +18,7 @@
 - **Playback does not restart after a stop or an underrun** (stock q6asm modules): after `snd_pcm_drop()` or an
   underrun followed by `snd_pcm_prepare()`, playback does not restart (nothing reaches the DSP) or the driver sends
   bogus buffers, depending on the period size; an underrun itself is never detected, and drain ends only on its
-  timeout. A fix is in [driver/q6asm](../driver/q6asm/README.md): the two modules rebuilt with four patches,
+  timeout. A fix is in [driver/q6asm](../driver/q6asm/README.md): the two modules rebuilt with three patches,
   optional, v0.5-rc, tested on a device. Without them: keep the pcm open and fed (silence when there is nothing to
   play), or close and reopen it instead of dropping and preparing.
 
@@ -99,15 +99,16 @@
 
 ## GPU and web layer
 
-- **freedreno loops forever on some browser render targets** (Adreno 5xx, GMEM tiling): `layout_gmem()` /
-  `calc_nbins()` in `src/gallium/drivers/freedreno/freedreno_gmem.c` keeps adding bins while a bin does not fit in
-  the 136 KiB of GMEM, and when even the smallest aligned bin does not fit the loop never ends. The thread spins at
-  100 %, the page hangs. Seen with WebKit's GPU 2D canvas, WebGL and, with WPE 2.54, some ordinary Home Assistant
-  dashboards; same in Mesa 25.0.7, 26.3.0-rc3 and 26.3.0. Programs with simple surfaces (a Slint or femtovg UI, a compositor)
-  do not hit it. **Workaround**: `FD_MESA_DEBUG=sysmem` (render straight to memory, no tiling) **in the browser's
-  environment only**, e.g. `Environment=FD_MESA_DEBUG=sysmem` in the browser's systemd unit: then the canvas and
-  WebGL work on the GPU. Do not set it system-wide (`/etc/environment`): every other GL program would lose tiling
-  for nothing. A real fix (fall back to sysmem only for the batch that does not fit) is to be proposed to Mesa.
+- **freedreno looped forever on multisampled render targets with a depth buffer** (Adreno 5xx, GMEM tiling).
+  **Fixed in `mesa-freedreno` 26.3.0-2 (v0.5)** by [image/mesa-patches/0001](../image/mesa-patches/0001-freedreno-count-depth-stencil-MSAA-once-in-GMEM-sizing.patch).
+  `gmem_key_init()` counted the depth/stencil buffer's MSAA samples twice (`layout.cpp` already includes them), so
+  with 4x MSAA even the smallest bin did not fit in GMEM and `calc_nbins()` kept adding bins forever: the thread spun
+  at 100 %, the page hung. Seen with WebKit's GPU 2D canvas, WebGL and, with WPE 2.54, some ordinary Home Assistant
+  dashboards; in every Mesa up to 26.3.0 and in Mesa's main branch. Root cause found by lzl51230
+  ([rickx/ubuntu-thinksmart#5](https://github.com/rickx/ubuntu-thinksmart/pull/5)). On the device, a 1280x800 FBO
+  with 4x MSAA and Z24S8: 60 frames in 0.5 s with the patch, a hang without. On older images (`26.3.0-1` and
+  earlier) the workaround is `FD_MESA_DEBUG=sysmem` (render straight to memory, no tiling) **in the browser's
+  environment only**, never system-wide.
 - **Debian's Mesa replaces ours if a package asks for it**: `mesa-freedreno` provides `libgbm1` and `libegl-mesa0`
   and conflicts with Debian's Mesa, so apt never installs both; but a package that needs Debian's exact versions
   (`libgbm-dev`, pulled by many `-dev` packages) makes apt propose removing `mesa-freedreno` and installing Debian's

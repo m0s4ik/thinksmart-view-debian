@@ -1,0 +1,39 @@
+From: Andrea <26578395+m0s4ik@users.noreply.github.com>
+Subject: [PATCH] freedreno: count depth/stencil MSAA samples once in GMEM sizing
+
+gmem_key_init() multiplies the depth/stencil resource's layout.cpp by the
+framebuffer's sample count, but layout.cpp already includes the resource's
+samples (fd5_layout and the other fdl layouts do cpp *= nr_samples). With
+4x MSAA a 4-byte Z24S8 buffer is counted as 64 bytes per pixel instead of
+16, even the smallest bin no longer fits in GMEM, and calc_nbins() keeps
+adding bins forever: the process spins at 100% in layout_gmem().
+
+Take the bytes of one sample from the format and multiply by the
+framebuffer's samples once, as the color buffers already do.
+
+Seen on the Adreno 506 (Lenovo ThinkSmart View) with WPE WebKit and Qt
+WebEngine, which draw with 4x MSAA. Root cause found by lzl51230
+(https://github.com/rickx/ubuntu-thinksmart/pull/5).
+
+---
+--- a/src/gallium/drivers/freedreno/freedreno_gmem.c
++++ b/src/gallium/drivers/freedreno/freedreno_gmem.c
+@@ -495,9 +495,16 @@
+ 
+    if (has_zs || assume_zs) {
+       struct fd_resource *rsc = fd_resource(pfb->zsbuf.texture);
+-      key->zsbuf_cpp[0] = rsc->layout.cpp * pfb->samples;
++      /* layout.cpp already includes the resource's sample count: take the
++       * bytes of one sample from the format and count the framebuffer's
++       * samples once, like the color buffers below.
++       */
++      key->zsbuf_cpp[0] =
++         util_format_get_blocksize(rsc->layout.format) * pfb->samples;
+       if (rsc->stencil)
+-         key->zsbuf_cpp[1] = rsc->stencil->layout.cpp * pfb->samples;
++         key->zsbuf_cpp[1] =
++            util_format_get_blocksize(rsc->stencil->layout.format) *
++            pfb->samples;
+ 
+       /* If we clear z or s but not both, and we are using z24s8 (ie.
+        * !separate_stencil) then we need to restore the other, even if

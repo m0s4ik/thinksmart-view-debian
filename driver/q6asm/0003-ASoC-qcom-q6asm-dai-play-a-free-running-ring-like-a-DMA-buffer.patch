@@ -21,8 +21,8 @@ flag is cleared on STOP and on every prepare, so streams driven by
 appl_ptr (the default stop_threshold) are unchanged.
 
 ---
- sound/soc/qcom/qdsp6/q6asm-dai.c | 29 ++++++++++++++++++++++++++++-
- 1 file changed, 28 insertions(+), 1 deletion(-)
+ sound/soc/qcom/qdsp6/q6asm-dai.c | 28 ++++++++++++++++++++++++++++-
+ 1 file changed, 27 insertions(+), 1 deletion(-)
 
 --- a/sound/soc/qcom/qdsp6/q6asm-dai.c
 +++ b/sound/soc/qcom/qdsp6/q6asm-dai.c
@@ -45,14 +45,14 @@ appl_ptr (the default stop_threshold) are unchanged.
  		break;
  	case ASM_CLIENT_EVENT_DATA_READ_DONE:
  		snd_pcm_period_elapsed(substream);
-@@ -299,6 +304,7 @@
- 	} else {
- 		/* ALSA restarts appl_ptr from 0 after a prepare */
- 		prtd->queue_ptr = 0;
-+		WRITE_ONCE(prtd->free_run, false);
- 		prtd->state = Q6ASM_STREAM_RUNNING;
- 	}
+@@ -245,6 +250,7 @@
  
+ 	/* ALSA resets appl_ptr for every prepare, including xrun recovery. */
+ 	prtd->queue_ptr = 0;
++	WRITE_ONCE(prtd->free_run, false);
+ 
+ 	ret = q6asm_map_memory_regions(substream->stream, prtd->audio_client,
+ 				       prtd->phys,
 @@ -318,6 +324,10 @@
  	struct q6asm_dai_rtd *prtd = runtime->private_data;
  	int i, ret = 0, avail_periods;

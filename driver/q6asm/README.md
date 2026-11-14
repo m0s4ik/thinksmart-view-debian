@@ -4,7 +4,7 @@
 uses the kernel package's ones, as v0.4 does.
 
 `q6asm` (the client of the DSP's audio stream manager) and `q6asm-dai` (the ALSA PCM on top of it) of the 7.1.3
-kernel, rebuilt out of tree with four patches. The rest of the audio stack (`q6core`, `q6afe`, `q6adm`, `q6routing`,
+kernel, rebuilt out of tree with three patches. The rest of the audio stack (`q6core`, `q6afe`, `q6adm`, `q6routing`,
 the machine driver, the TAS5782M driver) is the kernel package's, unchanged.
 
 ## Why
@@ -17,16 +17,19 @@ buffer without moving `appl_ptr`, gets nothing to the DSP at all.
 | Patch | Origin | What breaks without it |
 |---|---|---|
 | [`0001-…-wrap-the-position-of-a-full-ring-to-0.patch`](0001-ASoC-qcom-q6asm-dai-wrap-the-position-of-a-full-ring-to-0.patch) | upstream [`222d04cf55bc`](https://git.kernel.org/torvalds/c/222d04cf55bc), the unmodified commit (`Cc: stable`, not yet in 7.1.y) | the position is reported one frame short: an underrun is never detected, drain waits for its timeout; on capture the last frame of each period is held back |
-| [`0002-…-reset-the-queue-pointer-in-prepare.patch`](0002-ASoC-qcom-q6asm-dai-reset-the-queue-pointer-in-prepare.patch) | ours, not upstream | after a prepare ALSA restarts `appl_ptr` from 0 but `queue_ptr` keeps the old value: with 480, 2400 or 4800 frames per period nothing reaches the DSP any more (silent stall); with 960, 1440 or 1920 the driver sends hundreds of millions of bogus write commands until the transport refuses one |
-| [`0003-…-reset-the-buffer-index-and-hw-pointer-when-mapping.patch`](0003-ASoC-qcom-q6asm-reset-the-buffer-index-and-hw-pointer-when-mapping.patch) | ours, not upstream | `dsp_buf` and `hw_ptr` survive a re-prepare: the DSP is handed the ring from where the last run stopped (stale audio, and an out-of-bounds read if the new stream has fewer periods), the position is the previous run's until the first buffer returns (a spurious xrun); on capture up to that many stale periods |
-| [`0004-…-play-a-free-running-ring-like-a-DMA-buffer.patch`](0004-ASoC-qcom-q6asm-dai-play-a-free-running-ring-like-a-DMA-buffer.patch) | ours, not upstream | buffers are handed to the DSP only when `appl_ptr` moves; a stream with `stop_threshold` at the boundary (dmix) never moves it, so nothing is played, the position stays at 0 and dmix never ends. With 0004 such a stream is fed like a DMA ring: the whole ring at start, then one period per write done. Streams with the default `stop_threshold` are unchanged |
+| [`0002-…-Reset-PCM-positions-when-preparing-a-stream.patch`](0002-ASoC-qcom-q6asm-Reset-PCM-positions-when-preparing-a-stream.patch) | upstream [`54e89fab723d`](https://git.kernel.org/torvalds/c/54e89fab723d), the unmodified commit (`Cc: stable`, merged for 7.4, not yet in 7.1.y) | after a prepare ALSA restarts `appl_ptr` from 0 but `queue_ptr` keeps the old value: with 480, 2400 or 4800 frames per period nothing reaches the DSP any more (silent stall); with 960, 1440 or 1920 the driver sends hundreds of millions of bogus write commands until the transport refuses one. `dsp_buf` and `hw_ptr` also survive a re-prepare: the DSP is handed the ring from where the last run stopped (stale audio, and an out-of-bounds read if the new stream has fewer periods), the position is the previous run's until the first buffer returns (a spurious xrun); on capture up to that many stale periods |
+| [`0003-…-play-a-free-running-ring-like-a-DMA-buffer.patch`](0003-ASoC-qcom-q6asm-dai-play-a-free-running-ring-like-a-DMA-buffer.patch) | ours, not upstream | buffers are handed to the DSP only when `appl_ptr` moves; a stream with `stop_threshold` at the boundary (dmix) never moves it, so nothing is played, the position stays at 0 and dmix never ends. With 0003 such a stream is fed like a DMA ring: the whole ring at start, then one period per write done. Streams with the default `stop_threshold` are unchanged |
 
 - **0001 must not be used without 0002.** On the stock modules an underrun goes unnoticed and the stream resumes by
   itself when data comes back. With 0001 the underrun is detected, the application prepares again, and without 0002
   that prepare stalls the stream or floods the DSP: xrun recovery would be worse than before.
-- **0002, 0003 and 0004 are ours**, found by reading the code and confirmed on the device (results below). 0002 is the q6asm counterpart of upstream `cab45ab95ce7` (q6apm-dai), 0003 of `cab45ab95ce7` and
-  `0337b8129cf6` (q6apm).
-- The modules are built and installed **together**: 0003 changes `q6asm`, 0001, 0002 and 0004 change `q6asm-dai`.
+- **0002 was ours first.** Until v0.5-rc1 it was two patches of ours (queue pointer in prepare; buffer index and hw
+  pointer when mapping), found by reading the code and confirmed on the device (results below). The same fix, written
+  independently for the Moto G10, was merged upstream as `54e89fab723d`; it replaced ours (same code, reset in a
+  slightly different place: `queue_ptr` before the buffers are mapped instead of after the format block). **0003 is
+  ours.**
+- The modules are built and installed **together**: 0002 changes `q6asm` and `q6asm-dai`, 0001 and 0003 change
+  `q6asm-dai`.
 
 Already in 7.1.3, so not to be backported again: `cee3e63e7106` with `048c540ee76d` (STOP and EOS do not change the
 stream state) and `4b4db09f283d` (a failed prepare keeps the audio client). Between 7.1.3 and Linus' master the only
@@ -86,7 +89,7 @@ library, `ctypes` on `libasound.so.2`) plays short tones at −20 dBFS (`--quiet
 | 2 | write 0.3 s, sleep 1 s, check the state, recover with prepare, write 0.5 s | `XRUN` after the sleep; playback continues after recovery | 0001 + 0002 |
 | 3 | write 0.5 s, drain | drain returns in under ~1.5 s | 0001 |
 | 4 | `--cycles` times: write 1…7 periods (the stop falls mid-lap), drop, prepare, write one full buffer, wait one period | avail the same wherever the previous run stopped and below the whole ring, no immediate xrun | 0003 |
-| 5 | only with `--capture-device`: read 0.5 s, drop, prepare, read 0.5 s | both reads complete in time | 0001 + 0003 on capture |
+| 5 | only with `--capture-device`: read 0.5 s, drop, prepare, read 0.5 s | both reads complete in time | 0001 + 0002 on capture |
 
 On the stock modules step 2 never reaches `XRUN`: that is the expected "before" result. Step 4 sounds like a burst of
 clicks by design (fragments of 10-70 ms cut without a fade): judge it by the numbers, not by ear. `--device null` runs the script without a sound card, as a dry run that says nothing about the driver.
@@ -127,15 +130,15 @@ Also with the rebuilt modules: the sound card, `thinksmart-audio` and the microp
 suspend with a stream open resumes with the underrun detected and playback going on; in normal use a voice answer
 and AirPlay music play with no underrun. The AirPlay pause still takes 2-3 s: the receiver does not drop its queue yet.
 
-dmix (0004), with a `dmix` pcm on `hw:0,0` (periods of 480 × 4): on the stock modules and with 0001-0003 `aplay` of 1 s
-never ends (killed after 8 s); with 0004 it ends in 1.08 s, and two `aplay` at once (2 s and 1 s, the second started
+dmix (0003), with a `dmix` pcm on `hw:0,0` (periods of 480 × 4): on the stock modules and with 0001-0002 `aplay` of 1 s
+never ends (killed after 8 s); with 0003 it ends in 1.08 s, and two `aplay` at once (2 s and 1 s, the second started
 0.5 s later) end in 2.08 s and 1.03 s. Two tones played that way are heard together. `restart-test.py` unchanged
-with 0004 (every step `ok`).
+with 0003 (every step `ok`).
 
 ## Upstream
 
-0002, 0003 and 0004 could be proposed to linux-sound (the ASoC maintainers); they carry no `Signed-off-by` yet. Whether and
-when to send them is the owner's decision.
+0001 and 0002 are upstream. 0003 could be proposed to linux-sound (the ASoC maintainers); it carries no
+`Signed-off-by` yet. Whether and when to send it is the owner's decision.
 
 ## License
 

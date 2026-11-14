@@ -231,7 +231,7 @@ def playback_steps(pcm, args):
     report(3, how == "ok" and drained is not None and drained < 1.5,
            f"drain after 0.5 s: {'timed out (3 s)' if drained is None else f'{drained:.2f} s'}")
 
-    # 4: restarts that stop in the middle of a lap (0003). One period after the restart the position depends only on
+    # 4: restarts that stop in the middle of a lap (0002). One period after the restart the position depends only on
     # how far ahead the DSP takes buffers (3 periods measured on the device): it must be the same wherever the previous
     # run stopped. A stale buffer index or hw_ptr makes it depend on k (the stock modules: always the whole ring).
     full = tone(rate, pcm.buffer / rate, 392, q)

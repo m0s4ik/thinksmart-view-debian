@@ -16,7 +16,7 @@ None of these binaries are in this repository. `image/build.sh` expects them in 
 | `snd-soc-tas5782m.ko` | the speaker driver built for this kernel ([driver/tas5782m/README.md](../driver/tas5782m/README.md)) |
 | `vcnl4000.ko` | optional: the light sensor driver built for this kernel ([driver/vcnl4000/README.md](../driver/vcnl4000/README.md)) |
 | `venus-core.ko` | optional: the video decoder core rebuilt with the mainline HFI parser ([driver/venus/README.md](../driver/venus/README.md)); replaces the kernel package's one |
-| `q6asm.ko`, `q6asm-dai.ko` | optional, v0.5-rc: the audio stream modules rebuilt with four patches so that playback restarts after a stop or an underrun and dmix works ([driver/q6asm/README.md](../driver/q6asm/README.md)); both together, they replace the kernel package's ones |
+| `q6asm.ko`, `q6asm-dai.ko` | optional, v0.5-rc: the audio stream modules rebuilt with three patches so that playback restarts after a stop or an underrun and dmix works ([driver/q6asm/README.md](../driver/q6asm/README.md)); both together, they replace the kernel package's ones |
 | `s5kc505a.ko`, `apq8053-lenovo-cd-18781y-camera.dtb` | optional, only for the front camera (`CAMERA=1`): the sensor driver and the patched DTB ([driver/s5kc505a/README.md](../driver/s5kc505a/README.md)); CI builds both |
 | `mesa-freedreno_<version>_arm64.deb` | reduced Mesa for the GPU (freedreno only, EGL, GBM, OpenGL ES, Wayland platform, no LLVM, ~22 MB installed), built by `image/build-mesa.sh` (see [Mesa](#mesa) below) |
 | `libwpewebkit-2.0-1_*~bpo13+1_arm64.deb` (+ `-dev`, `wpewebkit-webdriver`) | optional, only for the web layer (`WEB=1`): WPE WebKit 2.54 backported from Debian forky to Debian 13 (Debian 13's 2.48 cannot use the GPU with Mesa 26), built by `image/build-wpe.sh` on a fast arm64 machine with Docker. The image installs only `libwpewebkit-2.0-1` |
@@ -59,8 +59,12 @@ postmarketOS mirror; only the initramfs is generated on the device by `mkinitfs`
 
 Debian's Mesa pulls LLVM (~450 MB on disk) and drivers for every GPU. `image/build-mesa.sh` builds **Mesa
 26.3.0** with only the freedreno Gallium driver, EGL, GBM and OpenGL ES, without LLVM, X11, Vulkan or video
-acceleration, and packs it as `mesa-freedreno_26.3.0-1_arm64.deb`. The tarball's sha256 is pinned in the script
-(checked against the release signature). The v0.3 release candidates shipped 26.3.0-rc3.
+acceleration, and packs it as `mesa-freedreno_26.3.0-2_arm64.deb`. The tarball's sha256 is pinned in the script
+(checked against the release signature). The v0.3 release candidates shipped 26.3.0-rc3, v0.3 and v0.4 26.3.0-1.
+
+- **Our patches** in `image/mesa-patches/`, applied in order on top of the release: 0001 counts the depth/stencil
+  MSAA samples once when sizing GMEM tiles, which ends the endless loop of
+  [known-issues.md](known-issues.md#gpu-and-web-layer) (from v0.5, package revision 2).
 
 - **Wayland platform, always on**: WPE WebKit 2.54 (web layer) creates its EGL displays and buffers through it, also
   when drawing off screen. Cost: `libwayland-client0`, ~90 KB.
