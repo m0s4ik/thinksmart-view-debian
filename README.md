@@ -69,44 +69,30 @@ v0.4).</sub>
 Not yet: camera tuning. `poweroff` does not stay off with the power supply plugged in (use suspend, or `systemctl
 halt` before unplugging). See [known issues](docs/known-issues.md).
 
-## What's new in v0.4
+## What's new in v0.5
 
-Tested on one device, as a written `CAMERA=1` image of this code ([what was tested how](image/README.md#tested)).
+Tested on one device, as a written `WEB=1 AIRPLAY=1 CAMERA=1` image of this code
+([release notes](https://github.com/m0s4ik/thinksmart-view-debian/releases/tag/v0.5)).
 
-- **Faster boot, 24 s → 14 s**, on every image: `deviceinfo_no_framebuffer=true` on the kernel command line stops
-  the postmarketOS initramfs from waiting 10 s for a framebuffer that cannot appear there. Nothing else in `/boot`
-  changes; 13.1-14.1 s with `systemd-analyze` over about ten boots, 24.2 s before
-  ([docs/boot.md](docs/boot.md#kernel-command-line)).
-- **Front camera, optional** (Samsung S5KC505A): jethac's out-of-tree sensor driver with horizontal and vertical flip
-  controls added here, and a device tree patch that turns on CAMSS and CCI, the camera rails and the sensor, with
-  `rotation = <180>` (the read-out is upside down on the stand). libcamera 0.7.1 sets both flips from it and delivers
-  upright frames, debayered on the GPU: about 25 fps at 1280×960 and 14 fps at 2560×1600, colours acceptable without
-  tuning. Raw RAW10 frames through V4L2 up to the full 2608×1960 ([driver/s5kc505a](driver/s5kc505a/README.md)).
-- **`CAMERA=1`** in `config.env` (off by default): the module, the camera DTB next to the original one, `fdt` and
-  `cma=128M` in `extlinux.conf` (the old file kept as `extlinux.conf.nocamera`), `v4l-utils`, libcamera 0.7.1 and
-  `libcamerasrc` from trixie-backports (nothing else taken from there, no Debian Mesa), and a udev rule so that a
-  program in groups `video` and `render` uses the camera without root
-  ([image/README.md](image/README.md#front-camera-optional)). `build.sh`, `verify.sh` and CI check both DTBs against
-  `driver/s5kc505a/dtb.sha256`.
-- **Lens cover**: `driver/s5kc505a/lens-cover.py` prints whether the cover is open or closed
-  ([driver/s5kc505a](driver/s5kc505a/README.md#lens-cover)).
-- **Boot report**, on every image: `thinksmart-boot-report.service` writes each boot's time, a small CPU benchmark,
-  the CPU frequency and temperature to the journal in one line (`journalctl -t thinksmart-boot`); a slow boot is
-  marked `SLOW` and gets the samples and CPU clock state taken while it was slow
-  ([docs/boot.md](docs/boot.md#boot-report)).
-- **`/boot` device timeout 90 s** instead of 15 s, on every image: in one slow boot the device came up after 15 s and
-  `/boot` was left unmounted ([docs/boot.md](docs/boot.md#headless-boot-the-emergency-mode-we-hit-and-fixed)).
-- **Build host tools**: `build.sh` also installs `systemd udev dmsetup nftables`, which `verify.sh` needs on the build
-  machine, and `verify.sh` run on its own stops with the names of missing tools.
-- Known: no sensor tuning, a one-pixel border in the wrong colour from the GPU debayer, the lens cover does not cut
-  the sensor's power ([known issues](docs/known-issues.md#camera)).
+- **Sound that restarts after a pause, and dmix**: rebuilt `q6asm` and `q6asm-dai` (optional in the image, built by
+  CI). On the stock modules, stopping and restarting a stream or recovering from an underrun stalls playback, and
+  drain only ends on its timeout. Two upstream fixes (`Cc: stable`) and one of ours that makes **dmix** work, so
+  several programs can share the speaker ([driver/q6asm](driver/q6asm/README.md)).
+- **`mesa-freedreno` 26.3.0-2**: freedreno no longer loops forever sizing its tiles for 4x MSAA with depth (WebKit's
+  GPU canvas, WebGL, some Home Assistant dashboards). The web engine runs on the GPU's normal path: **drop
+  `FD_MESA_DEBUG=sysmem`** from your units after updating ([image/mesa-patches](image/mesa-patches)).
+- **Docs**: the FT8201 panel variant runs the same image ([hardware.md](docs/hardware.md#the-ft8201-panel-variant)),
+  `persist` after repartitioning, EDL tips, and the projects built on this system (below).
+- Known: a heavy WebGL page hung the GPU once without sysmem (the kernel recovered it); `/etc/asound.conf` does not
+  use dmix yet ([known issues](docs/known-issues.md)).
 
-With `CAMERA=0` (the default) the image has the same packages and sizes as v0.3 on test builds; only the faster boot,
-the boot report and the `/boot` timeout change. Upgrading a device in place:
-[image/README.md](image/README.md#upgrading-without-reflashing).
+Upgrading a device in place: the Mesa package attached to the release, and the q6asm modules with
+`driver/q6asm/install-module.sh` ([image/README.md](image/README.md#from-v04-to-v05)).
 
-v0.3 brought Mesa 26.3.0 in `/usr`, the optional web layer and AirPlay runtime, application firewall rules, mDNS, the
-hardware video decoder and 16-bit audio ([release notes](https://github.com/m0s4ik/thinksmart-view-debian/releases/tag/v0.3)).
+v0.4 brought a faster boot (24 s → 14 s), the optional front camera (`CAMERA=1`) and the boot report
+([release notes](https://github.com/m0s4ik/thinksmart-view-debian/releases/tag/v0.4)); v0.3 Mesa 26.3.0 in `/usr`, the
+optional web layer and AirPlay runtime, application firewall rules, mDNS, the hardware video decoder and 16-bit audio
+([release notes](https://github.com/m0s4ik/thinksmart-view-debian/releases/tag/v0.3)).
 
 ## Built on it
 
