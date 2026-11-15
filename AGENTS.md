@@ -40,7 +40,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 | `driver/tas5782m/` | speaker driver (GPL-2.0-only), its build recipe and `install-module.sh` |
 | `driver/vcnl4000/` | optional light sensor module: recipe for the upstream driver, built out of tree |
 | `driver/venus/` | optional video decoder core: kernel source + `hfi_parser.patch`, built out of tree |
-| `driver/q6asm/` | optional audio stream modules (v0.5-rc, tested on a device): `q6asm` + `q6asm-dai` with three patches so playback restarts after a stop or an underrun and dmix works, built out of tree; `install-module.sh`, `restart-test.py` |
+| `driver/q6asm/` | optional audio stream modules (v0.5, tested on a device): `q6asm` + `q6asm-dai` with three patches so playback restarts after a stop or an underrun and dmix works, built out of tree; `install-module.sh`, `restart-test.py` |
 | `driver/s5kc505a/` | optional front camera: jethac's sensor driver with our flip controls (out of tree) + device tree patch; needs a rebuilt DTB (sha256 pinned in `dtb.sha256`), `fdt` and `cma=128M` in `extlinux.conf`: `CAMERA=1` in `config.env`, or by hand |
 
 ## Commands and the checks that must pass
@@ -51,7 +51,7 @@ Flashing over EDL can make the device unbootable, and only the full backup bring
 # build snd-soc-tas5782m.ko: driver/tas5782m/README.md, then copy it to image/parts/
 # optional: vcnl4000.ko (light sensor) from driver/vcnl4000/README.md, also to image/parts/
 # optional: venus-core.ko (video decoder) from driver/venus/README.md, also to image/parts/
-# optional, v0.5-rc: q6asm.ko + q6asm-dai.ko (both, driver/q6asm/README.md), also to image/parts/
+# optional, v0.5: q6asm.ko + q6asm-dai.ko (both, driver/q6asm/README.md), also to image/parts/
 # optional, CAMERA=1: s5kc505a.ko + apq8053-lenovo-cd-18781y-camera.dtb (driver/s5kc505a/README.md or CI artifacts)
 ./image/build-mesa.sh                            # reduced Mesa for the GPU -> image/parts/mesa-freedreno_*_arm64.deb
 /sbin/modinfo image/parts/snd-soc-tas5782m.ko    # vermagic "7.1.3-msm8953 SMP preempt mod_unload aarch64"

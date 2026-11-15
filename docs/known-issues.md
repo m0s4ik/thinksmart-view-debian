@@ -2,7 +2,7 @@
 
 ## Audio
 
-- **dmix** works only with the rebuilt q6asm modules ([driver/q6asm](../driver/q6asm/README.md), v0.5-rc): on the
+- **dmix** works only with the rebuilt q6asm modules ([driver/q6asm](../driver/q6asm/README.md), v0.5): on the
   stock ones `hw_ptr` stays at 0 and `aplay` on dmix never finishes draining, so one program plays at a time.
   `/etc/asound.conf` still opens the card directly (`speaker`, `default`): an application that needs several sounds
   at once mixes them itself and owns the pcm, or uses a `dmix` pcm of its own. PipeWire: not tried.
@@ -19,7 +19,7 @@
   underrun followed by `snd_pcm_prepare()`, playback does not restart (nothing reaches the DSP) or the driver sends
   bogus buffers, depending on the period size; an underrun itself is never detected, and drain ends only on its
   timeout. A fix is in [driver/q6asm](../driver/q6asm/README.md): the two modules rebuilt with three patches,
-  optional, v0.5-rc, tested on a device. Without them: keep the pcm open and fed (silence when there is nothing to
+  optional, v0.5, tested on a device. Without them: keep the pcm open and fed (silence when there is nothing to
   play), or close and reopen it instead of dropping and preparing.
 
 ## Wi-Fi

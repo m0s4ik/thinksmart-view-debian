@@ -1,6 +1,6 @@
-# q6asm audio stream modules (v0.5-rc)
+# q6asm audio stream modules (v0.5)
 
-**Status: v0.5-rc, tested on a device** (installed with `install-module.sh` on v0.4, results below). Optional: an image without these modules
+**Status: v0.5, tested on a device**: installed with `install-module.sh` on v0.4 (results below), then in a v0.5 image written to the device (2026-11-15: `restart-test.py --quiet` all ok). Optional: an image without these modules
 uses the kernel package's ones, as v0.4 does.
 
 `q6asm` (the client of the DSP's audio stream manager) and `q6asm-dai` (the ALSA PCM on top of it) of the 7.1.3

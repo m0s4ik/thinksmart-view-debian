@@ -163,7 +163,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 | [Hardware](docs/hardware.md) | panel, audio, Wi-Fi, sensors, keys, camera |
 | [Known issues](docs/known-issues.md) | what does not work (yet) |
 | [`image/`](image/README.md) | the build script, its options (web layer, AirPlay runtime, front camera), customization hook and upgrades in place |
-| [`driver/`](driver/) | the speaker driver ([tas5782m](driver/tas5782m/README.md)), the light sensor ([vcnl4000](driver/vcnl4000/README.md)), video decoder ([venus](driver/venus/README.md)), audio stream ([q6asm](driver/q6asm/README.md), v0.5-rc) and front camera ([s5kc505a](driver/s5kc505a/README.md)) modules, the experimental [thinksmart-poweroff](driver/thinksmart-poweroff/README.md) |
+| [`driver/`](driver/) | the speaker driver ([tas5782m](driver/tas5782m/README.md)), the light sensor ([vcnl4000](driver/vcnl4000/README.md)), video decoder ([venus](driver/venus/README.md)), audio stream ([q6asm](driver/q6asm/README.md), v0.5) and front camera ([s5kc505a](driver/s5kc505a/README.md)) modules, the experimental [thinksmart-poweroff](driver/thinksmart-poweroff/README.md) |
 
 ## Roadmap
 
@@ -182,7 +182,7 @@ The full walkthrough (backup, lk2nd, kernel files, speaker driver, Mesa, build, 
 - [ ] Faster boot, the last seconds (entropy wait, `check_keys`, `msm-firmware-loader`)
 - [x] Front camera (S5KC505A), optional (`CAMERA=1`): raw frames, upright frames through libcamera 0.7 on the GPU,
   full size (v0.4)
-- [x] Playback that restarts after a stop or an underrun, and dmix: rebuilt q6asm modules, optional (v0.5-rc)
+- [x] Playback that restarts after a stop or an underrun, and dmix: rebuilt q6asm modules, optional (v0.5)
 - [ ] Camera sensor tuning (colours are acceptable untuned with libcamera 0.7)
 - [x] FT8201 panel variant: same image, working on two units ([hardware.md](docs/hardware.md#the-ft8201-panel-variant))
 
